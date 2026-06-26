@@ -36,8 +36,10 @@ jobs:
 
     env:
       APP_ENV: test
+      DEBUG: "false"
       DATABASE_URL: postgresql+psycopg://test_user:test_password@localhost:5432/test_db
       JWT_SECRET_KEY: test-secret-key-for-ci
+      CORS_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:3000
 
     steps:
       - name: Checkout
@@ -62,7 +64,7 @@ jobs:
         run: alembic upgrade head
 
       - name: Run tests
-        run: pytest
+        run: python -m pytest
 
   security:
     name: Security
@@ -197,7 +199,7 @@ jobs:
             --max-instances=2
             --timeout=900
             --add-cloudsql-instances=${{ env.CLOUDSQL_INSTANCE }}
-            --set-env-vars=APP_ENV=staging,APP_NAME=scanx-command-center-api-staging,DATABASE_HOST=/cloudsql/${{ env.CLOUDSQL_INSTANCE }},DATABASE_NAME=${{ env.DATABASE_NAME }},DATABASE_USER=${{ env.DATABASE_USER }}
+            --set-env-vars=APP_ENV=staging,DEBUG=false,APP_NAME=scanx-command-center-api-staging,DATABASE_HOST=/cloudsql/${{ env.CLOUDSQL_INSTANCE }},DATABASE_NAME=${{ env.DATABASE_NAME }},DATABASE_USER=${{ env.DATABASE_USER }}
             --set-secrets=DATABASE_PASSWORD=scanx-staging-db-password:latest,JWT_SECRET_KEY=scanx-staging-jwt-secret:latest
 
       - name: Smoke test staging service
@@ -296,7 +298,7 @@ jobs:
             --max-instances=3
             --timeout=900
             --add-cloudsql-instances=${{ env.CLOUDSQL_INSTANCE }}
-            --set-env-vars=APP_ENV=production,APP_NAME=scanx-command-center-api,DATABASE_HOST=/cloudsql/${{ env.CLOUDSQL_INSTANCE }},DATABASE_NAME=${{ env.DATABASE_NAME }},DATABASE_USER=${{ env.DATABASE_USER }}
+            --set-env-vars=APP_ENV=production,DEBUG=false,APP_NAME=scanx-command-center-api,DATABASE_HOST=/cloudsql/${{ env.CLOUDSQL_INSTANCE }},DATABASE_NAME=${{ env.DATABASE_NAME }},DATABASE_USER=${{ env.DATABASE_USER }}
             --set-secrets=DATABASE_PASSWORD=scanx-db-password:latest,JWT_SECRET_KEY=scanx-jwt-secret:latest
 
       - name: Smoke test production service

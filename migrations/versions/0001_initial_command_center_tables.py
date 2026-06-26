@@ -7,8 +7,8 @@ Create Date: 2026-06-26
 
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "0001"
@@ -24,8 +24,12 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=120), nullable=False),
         sa.Column("phone", sa.String(length=30), nullable=True),
         sa.Column("timezone", sa.String(length=80), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_table(
@@ -38,8 +42,12 @@ def upgrade() -> None:
         sa.Column("date_of_birth", sa.Date(), nullable=True),
         sa.Column("preferred_contact_method", sa.String(length=30), nullable=False),
         sa.Column("important_notes", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("phone"),
     )
@@ -53,8 +61,12 @@ def upgrade() -> None:
         sa.Column("role", sa.String(length=40), nullable=False),
         sa.Column("hashed_password", sa.String(length=255), nullable=True),
         sa.Column("is_active", sa.Boolean(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("email"),
     )
@@ -70,8 +82,12 @@ def upgrade() -> None:
         sa.Column("report_status", sa.String(length=40), nullable=False),
         sa.Column("scheduled_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(["clinic_id"], ["clinics.id"]),
         sa.ForeignKeyConstraint(["patient_id"], ["patients.id"]),
         sa.PrimaryKeyConstraint("id"),

@@ -20,14 +20,15 @@ class Settings(BaseSettings):
     database_password: str | None = None
 
     jwt_secret_key: Annotated[str, Field(min_length=16)] = "change-me-for-local-dev"
-    cors_allowed_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    cors_allowed_origins: str = "http://localhost:5173,http://localhost:3000"
 
-    @field_validator("cors_allowed_origins", mode="before")
-    @classmethod
-    def split_cors_origins(cls, value: str | list[str]) -> list[str]:
-        if isinstance(value, str):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
-        return value
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [
+            origin.strip()
+            for origin in self.cors_allowed_origins.split(",")
+            if origin.strip()
+        ]
 
     @field_validator("debug", mode="before")
     @classmethod
