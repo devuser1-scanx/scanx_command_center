@@ -13,9 +13,7 @@ class Settings(BaseSettings):
     app_env: str = "local"
     debug: bool = False
 
-    database_url: str | None = (
-        "postgresql+psycopg://scanx:scanx@localhost:5432/scanx_command_center"
-    )
+    database_url: str | None = None
     database_host: str | None = None
     database_name: str = "scanx_app"
     database_user: str = "postgres"
