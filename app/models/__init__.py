@@ -1,6 +1,3 @@
-from app.models.appointment import Appointment
-from app.models.clinic import Clinic
-from app.models.patient import Patient
-from app.models.user import User
+from app.models.test_table import TestTable
 
-__all__ = ["Appointment", "Clinic", "Patient", "User"]
+__all__ = ["TestTable"]
