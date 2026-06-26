@@ -1,0 +1,16 @@
+.git
+.github
+.pytest_cache
+.ruff_cache
+.venv
+venv
+__pycache__
+*.pyc
+.env
+.env.*
+!/.env.example
+gha-creds-*.json
+htmlcov
+dist
+build
+*.egg-info

@@ -1,0 +1,314 @@
+name: FastAPI CI/CD to GCP Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+
+  pull_request:
+    branches:
+      - main
+      - dev
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U test_user -d test_db"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+psycopg://test_user:test_password@localhost:5432/test_db
+      JWT_SECRET_KEY: test-secret-key-for-ci
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Run migrations
+        run: alembic upgrade head
+
+      - name: Run tests
+        run: pytest
+
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    needs: test
+
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install security tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit pip-audit semgrep
+
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Python security scan
+        run: bandit -r app -lll -iii
+
+      - name: Dependency vulnerability scan
+        run: pip-audit -r requirements.txt
+
+      - name: Static analysis
+        run: semgrep scan --config=p/python --config=p/owasp-top-ten --error
+
+      - name: Filesystem vulnerability scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+  deploy_staging:
+    name: Build, Scan, Deploy to Staging
+    runs-on: ubuntu-latest
+    needs:
+      - test
+      - security
+
+    if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+
+    permissions:
+      contents: read
+      id-token: write
+      security-events: write
+      actions: read
+
+    environment: staging
+
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      REGION: ${{ vars.GCP_REGION }}
+      SERVICE_NAME: ${{ vars.CLOUD_RUN_SERVICE_STAGING }}
+      ARTIFACT_REPO: ${{ vars.ARTIFACT_REPO }}
+      IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+      CLOUDSQL_INSTANCE: ${{ vars.CLOUDSQL_INSTANCE }}
+      DATABASE_NAME: ${{ vars.DATABASE_NAME_STAGING }}
+      DATABASE_USER: ${{ vars.DATABASE_USER }}
+      IMAGE_URI: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REPO }}/${{ vars.IMAGE_NAME }}:${{ github.sha }}-staging
+      LATEST_IMAGE_URI: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REPO }}/${{ vars.IMAGE_NAME }}:staging-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t $IMAGE_URI \
+            -t $LATEST_IMAGE_URI \
+            .
+
+      - name: Scan Docker image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_URI }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+
+      - name: Push Docker image
+        run: |
+          docker push $IMAGE_URI
+          docker push $LATEST_IMAGE_URI
+
+      - name: Deploy to Cloud Run Staging
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v3
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ env.REGION }}
+          image: ${{ env.IMAGE_URI }}
+          flags: >-
+            --allow-unauthenticated
+            --port=8080
+            --memory=512Mi
+            --cpu=1
+            --min-instances=0
+            --max-instances=2
+            --timeout=900
+            --add-cloudsql-instances=${{ env.CLOUDSQL_INSTANCE }}
+            --set-env-vars=APP_ENV=staging,APP_NAME=scanx-command-center-api-staging,DATABASE_HOST=/cloudsql/${{ env.CLOUDSQL_INSTANCE }},DATABASE_NAME=${{ env.DATABASE_NAME }},DATABASE_USER=${{ env.DATABASE_USER }}
+            --set-secrets=DATABASE_PASSWORD=scanx-staging-db-password:latest,JWT_SECRET_KEY=scanx-staging-jwt-secret:latest
+
+      - name: Smoke test staging service
+        run: |
+          SERVICE_URL="${{ steps.deploy.outputs.url }}"
+          for i in {1..10}; do
+            STATUS_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" "$SERVICE_URL/health" || true)
+            if [ "$STATUS_CODE" = "200" ]; then
+              cat /tmp/response.txt
+              exit 0
+            fi
+            sleep 5
+          done
+          cat /tmp/response.txt
+          exit 1
+
+  deploy_production:
+    name: Build, Scan, Deploy to Production
+    runs-on: ubuntu-latest
+    needs:
+      - test
+      - security
+
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    permissions:
+      contents: read
+      id-token: write
+      security-events: write
+      actions: read
+
+    environment: production
+
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      REGION: ${{ vars.GCP_REGION }}
+      SERVICE_NAME: ${{ vars.CLOUD_RUN_SERVICE_PRODUCTION }}
+      ARTIFACT_REPO: ${{ vars.ARTIFACT_REPO }}
+      IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+      CLOUDSQL_INSTANCE: ${{ vars.CLOUDSQL_INSTANCE }}
+      DATABASE_NAME: ${{ vars.DATABASE_NAME_PRODUCTION }}
+      DATABASE_USER: ${{ vars.DATABASE_USER }}
+      IMAGE_URI: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REPO }}/${{ vars.IMAGE_NAME }}:${{ github.sha }}-production
+      LATEST_IMAGE_URI: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REPO }}/${{ vars.IMAGE_NAME }}:production-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t $IMAGE_URI \
+            -t $LATEST_IMAGE_URI \
+            .
+
+      - name: Scan Docker image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_URI }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+
+      - name: Push Docker image
+        run: |
+          docker push $IMAGE_URI
+          docker push $LATEST_IMAGE_URI
+
+      - name: Deploy to Cloud Run Production
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v3
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ env.REGION }}
+          image: ${{ env.IMAGE_URI }}
+          flags: >-
+            --allow-unauthenticated
+            --port=8080
+            --memory=512Mi
+            --cpu=1
+            --min-instances=0
+            --max-instances=3
+            --timeout=900
+            --add-cloudsql-instances=${{ env.CLOUDSQL_INSTANCE }}
+            --set-env-vars=APP_ENV=production,APP_NAME=scanx-command-center-api,DATABASE_HOST=/cloudsql/${{ env.CLOUDSQL_INSTANCE }},DATABASE_NAME=${{ env.DATABASE_NAME }},DATABASE_USER=${{ env.DATABASE_USER }}
+            --set-secrets=DATABASE_PASSWORD=scanx-db-password:latest,JWT_SECRET_KEY=scanx-jwt-secret:latest
+
+      - name: Smoke test production service
+        run: |
+          SERVICE_URL="${{ steps.deploy.outputs.url }}"
+          for i in {1..10}; do
+            STATUS_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" "$SERVICE_URL/health" || true)
+            if [ "$STATUS_CODE" = "200" ]; then
+              cat /tmp/response.txt
+              exit 0
+            fi
+            sleep 5
+          done
+          cat /tmp/response.txt
+          exit 1
