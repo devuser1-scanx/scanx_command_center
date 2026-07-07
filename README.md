@@ -14,14 +14,32 @@ Google Cloud Run with Cloud SQL PostgreSQL.
 - GitHub Actions
 - Google Cloud Run
 
-## Local Setup
+## Local Setup and Commands
+
+Run commands from the repository root:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements-dev.txt
+cd C:\Latitude_Projects\ScanX\Command_Center\scanx_command_center
+```
+
+Create and activate the virtual environment:
+
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+```
+
+Install application and development dependencies:
+
+```powershell
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r requirements-dev.txt
+```
+
+Create the local environment file:
+
+```powershell
 copy .env.example .env
-uvicorn app.main:app --reload
 ```
 
 The default local database URL is:
@@ -30,13 +48,66 @@ The default local database URL is:
 postgresql+psycopg://scanx:scanx@localhost:5432/scanx_command_center
 ```
 
-Run checks:
+For local test-style runs, use a reachable PostgreSQL database and a JWT secret with at least
+32 characters:
 
 ```powershell
-ruff check .
-pytest
+$env:APP_ENV = "test"
+$env:DEBUG = "false"
+$env:DATABASE_URL = "postgresql+psycopg://test_user:test_password@localhost:5432/test_db"
+$env:JWT_SECRET_KEY = "test-secret-key-for-local-that-is-long-enough"
+$env:CORS_ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:3000"
+```
+
+Run database migrations:
+
+```powershell
 alembic upgrade head
 ```
+
+Run Ruff formatting and lint checks:
+
+```powershell
+ruff format .
+ruff check . --fix
+ruff check .
+```
+
+Run tests:
+
+```powershell
+python -m pytest
+```
+
+Run Python dependency audits:
+
+```powershell
+python -m pip install pip-audit
+pip-audit -r requirements.txt
+pip-audit
+```
+
+Run the development server:
+
+```powershell
+uvicorn app.main:app --reload
+```
+
+The API will be available at:
+
+```text
+http://localhost:8000
+```
+
+Before pushing code to `dev`, `main`, or production-related branches, run the full local
+pre-deployment check:
+
+```cmd
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%cd%\predeploy-check.ps1"
+```
+
+The pre-deployment script runs dependency installation, Ruff, Alembic migrations, pytest,
+security scans, Docker build checks, image scanning, and a local `/health` smoke test.
 
 ## Health Endpoints
 

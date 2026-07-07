@@ -70,8 +70,7 @@ def get_session_by_refresh_token_hash(
             .selectinload(CCUserRole.role)
             .selectinload(CCRole.permissions)
             .selectinload(CCRolePermission.permission),
-            selectinload(CCSession.user)
-            .selectinload(CCUser.clinic_access),
+            selectinload(CCSession.user).selectinload(CCUser.clinic_access),
         )
     )
 
@@ -112,13 +111,7 @@ def revoke_session(
 
 
 def collect_role_codes(user: CCUser) -> list[str]:
-    return sorted(
-        {
-            user_role.role.code
-            for user_role in user.roles
-            if user_role.role.is_active
-        }
-    )
+    return sorted({user_role.role.code for user_role in user.roles if user_role.role.is_active})
 
 
 def collect_permission_codes(user: CCUser) -> list[str]:
@@ -180,9 +173,7 @@ def get_password_reset_token(
         .where(
             CCPasswordResetToken.token_hash == token_hash,
         )
-        .options(
-            selectinload(CCPasswordResetToken.user)
-        )
+        .options(selectinload(CCPasswordResetToken.user))
     )
 
     return db.scalar(statement)

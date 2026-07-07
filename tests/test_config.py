@@ -11,9 +11,7 @@ def test_debug_string_values_are_normalized() -> None:
 
 
 def test_cors_origins_are_split_and_trimmed() -> None:
-    settings = Settings(
-        cors_allowed_origins=" http://localhost:3000, ,https://scanx.test "
-    )
+    settings = Settings(cors_allowed_origins=" http://localhost:3000, ,https://scanx.test ")
 
     assert settings.cors_origins_list == [
         "http://localhost:3000",
@@ -44,8 +42,7 @@ def test_database_uri_escapes_password() -> None:
     )
 
     assert settings.sqlalchemy_database_uri == (
-        "postgresql+psycopg://scanx_user:pa+ss%2Fword"
-        "@/scanx?host=/cloudsql/project:region:instance"
+        "postgresql+psycopg://scanx_user:pa+ss%2Fword@/scanx?host=/cloudsql/project:region:instance"
     )
 
 

@@ -17,20 +17,14 @@ def normalize_email(email: str) -> str:
 
 
 def get_existing_user(db: Session, email: str) -> CCUser | None:
-    return db.scalar(
-        select(CCUser).where(CCUser.email == email)
-    )
+    return db.scalar(select(CCUser).where(CCUser.email == email))
 
 
 def get_admin_role(db: Session) -> CCRole:
-    role = db.scalar(
-        select(CCRole).where(CCRole.code == "admin")
-    )
+    role = db.scalar(select(CCRole).where(CCRole.code == "admin"))
 
     if role is None:
-        raise RuntimeError(
-            "Admin role not found. Run 'alembic upgrade head' first."
-        )
+        raise RuntimeError("Admin role not found. Run 'alembic upgrade head' first.")
 
     return role
 
@@ -103,8 +97,7 @@ def bootstrap_admin(
                 role_id=admin_role.id,
             ):
                 raise RuntimeError(
-                    f"User '{normalized_email}' already exists "
-                    "and already has the admin role."
+                    f"User '{normalized_email}' already exists and already has the admin role."
                 )
 
             existing_user.password_hash = hash_password(password)
@@ -124,10 +117,7 @@ def bootstrap_admin(
 
             db.commit()
 
-            print(
-                f"Existing user '{normalized_email}' was updated "
-                "and assigned the admin role."
-            )
+            print(f"Existing user '{normalized_email}' was updated and assigned the admin role.")
             return
 
         user = CCUser(
@@ -155,9 +145,7 @@ def bootstrap_admin(
 
         db.commit()
 
-        print(
-            f"Admin user '{normalized_email}' created successfully."
-        )
+        print(f"Admin user '{normalized_email}' created successfully.")
         print(f"User ID: {user.id}")
         print("The user must change the password after first login.")
 
@@ -198,13 +186,9 @@ def parse_arguments() -> argparse.Namespace:
 def main() -> None:
     args = parse_arguments()
 
-    password = getpass.getpass(
-        "Enter initial admin password: "
-    )
+    password = getpass.getpass("Enter initial admin password: ")
 
-    password_confirmation = getpass.getpass(
-        "Confirm initial admin password: "
-    )
+    password_confirmation = getpass.getpass("Confirm initial admin password: ")
 
     if password != password_confirmation:
         print(

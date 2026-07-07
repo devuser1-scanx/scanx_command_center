@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     auth_max_failed_login_attempts: int = 3
     auth_account_lock_minutes: int = 5
     password_reset_token_expire_minutes: int = 30
-    
+
     database_url: str | None = None
     database_host: str | None = None
     database_name: str = "scanx_app"
@@ -34,17 +34,11 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 7
 
-    cors_allowed_origins: str = (
-        "http://localhost:5173,http://localhost:3000"
-    )
+    cors_allowed_origins: str = "http://localhost:5173,http://localhost:3000"
 
     @property
     def cors_origins_list(self) -> list[str]:
-        return [
-            origin.strip()
-            for origin in self.cors_allowed_origins.split(",")
-            if origin.strip()
-        ]
+        return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
 
     @field_validator("debug", mode="before")
     @classmethod
@@ -76,9 +70,7 @@ class Settings(BaseSettings):
             return self.database_url
 
         if not self.database_password:
-            raise ValueError(
-                "DATABASE_URL or DATABASE_PASSWORD must be configured"
-            )
+            raise ValueError("DATABASE_URL or DATABASE_PASSWORD must be configured")
 
         host = self.database_host or "localhost"
         password = quote_plus(self.database_password)

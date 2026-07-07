@@ -165,11 +165,9 @@ def change_my_password(
         user_agent=get_user_agent(request),
     )
     return MessageResponse(
-        message=(
-            "Password changed successfully. "
-            "Please log in again using the new password."
-        )
+        message=("Password changed successfully. Please log in again using the new password.")
     )
+
 
 @router.post(
     "/forgot-password",
@@ -223,8 +221,5 @@ def reset_user_password(
     )
 
     return MessageResponse(
-        message=(
-            "Password reset successfully. "
-            "You may now log in using the new password."
-        )
+        message=("Password reset successfully. You may now log in using the new password.")
     )

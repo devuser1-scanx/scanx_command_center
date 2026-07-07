@@ -8,6 +8,11 @@ $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
 $TestJwtSecret = "test-secret-key-for-local-that-is-long-enough"
+$TestDbContainer = "scanx-test-postgres"
+$TestDbUser = "test_user"
+$TestDbPassword = "test_password"
+$TestDbName = "test_db"
+$TestDbPort = "5432"
 
 Write-Host ""
 Write-Host "========================================"
@@ -90,45 +95,86 @@ foreach ($tool in @("gitleaks", "trivy")) {
     }
 }
 
+function New-TestPostgresContainer {
+    Write-Host "Creating $TestDbContainer container..."
+    docker run --name $TestDbContainer `
+        -e POSTGRES_USER=$TestDbUser `
+        -e POSTGRES_PASSWORD=$TestDbPassword `
+        -e POSTGRES_DB=$TestDbName `
+        -p ${TestDbPort}:5432 `
+        -d postgres:15 | Out-Null
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Failed to create $TestDbContainer. Check whether local port $TestDbPort is already in use." -ForegroundColor Red
+        exit 1
+    }
+}
+
+function Wait-TestPostgresReady {
+    Write-Host "Waiting for PostgreSQL to be ready..."
+    for ($attempt = 1; $attempt -le 12; $attempt++) {
+        docker exec $TestDbContainer pg_isready -U $TestDbUser -d $TestDbName | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "PostgreSQL is ready."
+            return
+        }
+
+        if ($attempt -eq 12) {
+            Write-Host "PostgreSQL did not become ready in time." -ForegroundColor Red
+            exit 1
+        }
+
+        Start-Sleep -Seconds 2
+    }
+}
+
+function Test-PostgresCredentials {
+    $env:PGPASSWORD = $TestDbPassword
+
+    python -c "import psycopg; connection = psycopg.connect('host=localhost port=$TestDbPort dbname=$TestDbName user=$TestDbUser password=$TestDbPassword'); connection.execute('SELECT 1'); connection.close()" | Out-Null
+
+    Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
+
+    return $LASTEXITCODE -eq 0
+}
+
 # 5. Start local PostgreSQL test DB
 Write-Host ""
 Write-Host "Checking local PostgreSQL test container..."
 
-$containerExists = docker ps -a --format "{{.Names}}" | Select-String -Pattern "^scanx-test-postgres$"
+$containerExists = docker ps -a --format "{{.Names}}" | Select-String -Pattern "^$TestDbContainer$"
 
 if ($containerExists) {
-    Write-Host "scanx-test-postgres container exists. Starting it..."
-    docker start scanx-test-postgres | Out-Null
+    Write-Host "$TestDbContainer container exists. Starting it..."
+    docker start $TestDbContainer | Out-Null
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Failed to start $TestDbContainer. Recreating it..." -ForegroundColor Yellow
+        docker rm -f $TestDbContainer | Out-Null
+        New-TestPostgresContainer
+    }
 } else {
-    Write-Host "Creating scanx-test-postgres container..."
-    docker run --name scanx-test-postgres `
-        -e POSTGRES_USER=test_user `
-        -e POSTGRES_PASSWORD=test_password `
-        -e POSTGRES_DB=test_db `
-        -p 5432:5432 `
-        -d postgres:15 | Out-Null
+    New-TestPostgresContainer
 }
 
-Write-Host "Waiting for PostgreSQL to be ready..."
-for ($attempt = 1; $attempt -le 12; $attempt++) {
-    docker exec scanx-test-postgres pg_isready -U test_user -d test_db | Out-Null
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "PostgreSQL is ready."
-        break
-    }
+Wait-TestPostgresReady
 
-    if ($attempt -eq 12) {
-        Write-Host "PostgreSQL did not become ready in time." -ForegroundColor Red
+if (-not (Test-PostgresCredentials)) {
+    Write-Host "$TestDbContainer did not accept expected credentials. Recreating it..." -ForegroundColor Yellow
+    docker rm -f $TestDbContainer | Out-Null
+    New-TestPostgresContainer
+    Wait-TestPostgresReady
+
+    if (-not (Test-PostgresCredentials)) {
+        Write-Host "Fresh PostgreSQL container still rejected expected credentials." -ForegroundColor Red
         exit 1
     }
-
-    Start-Sleep -Seconds 2
 }
 
 # 6. Set test environment variables
 $env:APP_ENV = "test"
 $env:DEBUG = "false"
-$env:DATABASE_URL = "postgresql+psycopg://test_user:test_password@localhost:5432/test_db"
+$env:DATABASE_URL = "postgresql+psycopg://${TestDbUser}:${TestDbPassword}@localhost:${TestDbPort}/${TestDbName}"
 $env:JWT_SECRET_KEY = $TestJwtSecret
 $env:CORS_ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:3000"
 
@@ -206,7 +252,7 @@ docker run -d --name scanx-local-health-check `
     -e APP_ENV=local `
     -e DEBUG=false `
     -e APP_NAME=scanx-command-center-api-local `
-    -e DATABASE_URL="postgresql+psycopg://test_user:test_password@host.docker.internal:5432/test_db" `
+    -e DATABASE_URL="postgresql+psycopg://${TestDbUser}:${TestDbPassword}@host.docker.internal:${TestDbPort}/${TestDbName}" `
     -e JWT_SECRET_KEY="$TestJwtSecret" `
     -e CORS_ALLOWED_ORIGINS="http://localhost:5173,http://localhost:3000" `
     scanx-command-center-api:local | Out-Null

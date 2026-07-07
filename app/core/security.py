@@ -17,37 +17,22 @@ password_hash = PasswordHash.recommended()
 
 def validate_password_strength(password: str) -> None:
     if len(password) < 12:
-        raise ValueError(
-            "Password must contain at least 12 characters."
-        )
+        raise ValueError("Password must contain at least 12 characters.")
 
     if len(password) > 200:
-        raise ValueError(
-            "Password must not exceed 200 characters."
-        )
+        raise ValueError("Password must not exceed 200 characters.")
 
     if not any(character.isupper() for character in password):
-        raise ValueError(
-            "Password must contain at least one uppercase letter."
-        )
+        raise ValueError("Password must contain at least one uppercase letter.")
 
     if not any(character.islower() for character in password):
-        raise ValueError(
-            "Password must contain at least one lowercase letter."
-        )
+        raise ValueError("Password must contain at least one lowercase letter.")
 
     if not any(character.isdigit() for character in password):
-        raise ValueError(
-            "Password must contain at least one number."
-        )
+        raise ValueError("Password must contain at least one number.")
 
-    if not any(
-        not character.isalnum()
-        for character in password
-    ):
-        raise ValueError(
-            "Password must contain at least one special character."
-        )
+    if not any(not character.isalnum() for character in password):
+        raise ValueError("Password must contain at least one special character.")
 
 
 def hash_password(password: str) -> str:
@@ -79,9 +64,7 @@ def create_access_token(
     expires_at = now + (
         expires_delta
         if expires_delta is not None
-        else timedelta(
-            minutes=settings.jwt_access_token_expire_minutes
-        )
+        else timedelta(minutes=settings.jwt_access_token_expire_minutes)
     )
 
     payload: dict[str, Any] = {
@@ -113,9 +96,7 @@ def create_refresh_token(
     expires_at = now + (
         expires_delta
         if expires_delta is not None
-        else timedelta(
-            days=settings.jwt_refresh_token_expire_days
-        )
+        else timedelta(days=settings.jwt_refresh_token_expire_days)
     )
 
     payload = {
@@ -142,19 +123,13 @@ def decode_token(token: str) -> dict[str, Any]:
             algorithms=[settings.jwt_algorithm],
         )
     except InvalidTokenError as exc:
-        raise ValueError(
-            "Invalid or expired token."
-        ) from exc
+        raise ValueError("Invalid or expired token.") from exc
 
     if not payload.get("sub"):
-        raise ValueError(
-            "Token subject is missing."
-        )
+        raise ValueError("Token subject is missing.")
 
     if not payload.get("type"):
-        raise ValueError(
-            "Token type is missing."
-        )
+        raise ValueError("Token type is missing.")
 
     return payload
 
@@ -164,9 +139,7 @@ def generate_secure_token() -> str:
 
 
 def hash_token(token: str) -> str:
-    return sha256(
-        token.encode("utf-8")
-    ).hexdigest()
+    return sha256(token.encode("utf-8")).hexdigest()
 
 
 def utc_now() -> datetime:

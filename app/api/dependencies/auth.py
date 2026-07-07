@@ -70,10 +70,7 @@ def require_permission(
         if permission_code not in permissions:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=(
-                    f"Permission '{permission_code}' is required "
-                    "to perform this action."
-                ),
+                detail=(f"Permission '{permission_code}' is required to perform this action."),
             )
 
         return current_user
@@ -101,8 +98,6 @@ def require_role(
 
 
 def require_admin(
-    current_user: CCUser = Depends(
-        require_role("admin")
-    ),
+    current_user: CCUser = Depends(require_role("admin")),
 ) -> CCUser:
     return current_user

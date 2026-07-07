@@ -155,10 +155,7 @@ def authenticate_user(
             detail="User account is inactive.",
         )
 
-    if (
-    user.locked_until
-    and ensure_utc(user.locked_until) > now
-    ):
+    if user.locked_until and ensure_utc(user.locked_until) > now:
         record_login_attempt(
             db,
             email=normalized_email,
@@ -179,9 +176,7 @@ def authenticate_user(
         user.failed_login_attempts += 1
 
         if user.failed_login_attempts >= settings.auth_max_failed_login_attempts:
-            user.locked_until = now + timedelta(
-                minutes=settings.auth_account_lock_minutes
-            )
+            user.locked_until = now + timedelta(minutes=settings.auth_account_lock_minutes)
             user.failed_login_attempts = 0
 
         record_login_attempt(
@@ -241,9 +236,7 @@ def issue_tokens(
         session_id=0,
     )
 
-    refresh_expires_at = utc_now() + timedelta(
-        days=settings.jwt_refresh_token_expire_days
-    )
+    refresh_expires_at = utc_now() + timedelta(days=settings.jwt_refresh_token_expire_days)
 
     session = create_session(
         db,
@@ -320,10 +313,7 @@ def refresh_tokens(
 
     now = utc_now()
 
-    if (
-    session.revoked_at is not None
-    or ensure_utc(session.expires_at) <= now
-    ):
+    if session.revoked_at is not None or ensure_utc(session.expires_at) <= now:
         raise INVALID_REFRESH_TOKEN_ERROR
 
     if not session.user.is_active:
@@ -369,7 +359,6 @@ def logout(
         db.commit()
 
 
-
 def change_password(
     db: Session,
     *,
@@ -401,10 +390,7 @@ def change_password(
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "New password must be different "
-                "from the current password."
-            ),
+            detail=("New password must be different from the current password."),
         )
 
     try:
@@ -432,14 +418,14 @@ def change_password(
     db.add(user)
 
     record_user_activity(
-    db,
-    actor_user_id=user.id,
-    target_user_id=user.id,
-    action="auth.password_changed",
-    resource_type="cc_user",
-    resource_id=str(user.id),
-    ip_address=ip_address,
-    user_agent=user_agent,
+        db,
+        actor_user_id=user.id,
+        target_user_id=user.id,
+        action="auth.password_changed",
+        resource_type="cc_user",
+        resource_id=str(user.id),
+        ip_address=ip_address,
+        user_agent=user_agent,
     )
     db.commit()
 
@@ -470,10 +456,7 @@ def request_password_reset(
         db,
         user_id=user.id,
         token_hash=hash_token(raw_token),
-        expires_at=now
-        + timedelta(
-            minutes=settings.password_reset_token_expire_minutes
-        ),
+        expires_at=now + timedelta(minutes=settings.password_reset_token_expire_minutes),
     )
 
     db.commit()
@@ -543,10 +526,7 @@ def reset_password(
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "New password must be different "
-                "from the existing password."
-            ),
+            detail=("New password must be different from the existing password."),
         )
 
     user.password_hash = hash_password(new_password)
@@ -567,16 +547,16 @@ def reset_password(
     db.add(reset_token)
 
     record_user_activity(
-    db,
-    actor_user_id=user.id,
-    target_user_id=user.id,
-    action="auth.password_reset",
-    resource_type="cc_user",
-    resource_id=str(user.id),
-    ip_address=ip_address,
-    user_agent=user_agent,
+        db,
+        actor_user_id=user.id,
+        target_user_id=user.id,
+        action="auth.password_reset",
+        resource_type="cc_user",
+        resource_id=str(user.id),
+        ip_address=ip_address,
+        user_agent=user_agent,
     )
-    
+
     db.commit()
 
 
@@ -605,4 +585,4 @@ def record_user_activity(
             ip_address=ip_address,
             user_agent=user_agent,
         )
-    )    
+    )

@@ -874,10 +874,7 @@ def upgrade() -> None:
         )
     ).mappings()
 
-    permission_map = {
-        row["code"]: row["id"]
-        for row in permission_rows
-    }
+    permission_map = {row["code"]: row["id"] for row in permission_rows}
 
     role_permission_rows = [
         {
