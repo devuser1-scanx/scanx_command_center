@@ -1,9 +1,13 @@
 # predeploy-check.ps1
 # Run all local CI/CD checks before pushing to GitHub
 # Command to run this script using:
-    # Powershell: powershell -ExecutionPolicy Bypass -File .\predeploy-check.ps1
+    # PowerShell: powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\predeploy-check.ps1
     # CMD: powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%cd%\predeploy-check.ps1"
 $ErrorActionPreference = "Stop"
+
+Set-Location $PSScriptRoot
+
+$TestJwtSecret = "test-secret-key-for-local-that-is-long-enough"
 
 Write-Host ""
 Write-Host "========================================"
@@ -64,15 +68,26 @@ Run-Step "Docker is running" {
 
 # 4. Install/update dependencies
 Run-Step "Upgrade pip, setuptools, wheel" {
-    python -m pip install --upgrade pip==26.1.2 setuptools wheel
+    python -m pip install --upgrade pip setuptools wheel
 }
 
 Run-Step "Install development dependencies" {
-    pip install -r requirements-dev.txt
+    python -m pip install -r requirements-dev.txt
+}
+
+Run-Step "Install local security tools" {
+    python -m pip install bandit pip-audit semgrep
 }
 
 Run-Step "Check Python dependency conflicts" {
-    pip check
+    python -m pip check
+}
+
+foreach ($tool in @("gitleaks", "trivy")) {
+    if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) {
+        Write-Host "$tool not found. Please install $tool and rerun this script." -ForegroundColor Red
+        exit 1
+    }
 }
 
 # 5. Start local PostgreSQL test DB
@@ -114,7 +129,7 @@ for ($attempt = 1; $attempt -le 12; $attempt++) {
 $env:APP_ENV = "test"
 $env:DEBUG = "false"
 $env:DATABASE_URL = "postgresql+psycopg://test_user:test_password@localhost:5432/test_db"
-$env:JWT_SECRET_KEY = "test-secret-key-for-local"
+$env:JWT_SECRET_KEY = $TestJwtSecret
 $env:CORS_ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:3000"
 
 # 7. Formatting and linting
@@ -192,7 +207,7 @@ docker run -d --name scanx-local-health-check `
     -e DEBUG=false `
     -e APP_NAME=scanx-command-center-api-local `
     -e DATABASE_URL="postgresql+psycopg://test_user:test_password@host.docker.internal:5432/test_db" `
-    -e JWT_SECRET_KEY="test-secret-key-for-local" `
+    -e JWT_SECRET_KEY="$TestJwtSecret" `
     -e CORS_ALLOWED_ORIGINS="http://localhost:5173,http://localhost:3000" `
     scanx-command-center-api:local | Out-Null
 
