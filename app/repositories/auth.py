@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.auth import (
+    CCPasswordResetToken,
     CCPermission,
     CCRole,
     CCRolePermission,
@@ -148,3 +149,80 @@ def collect_clinic_access(
             access.clinic_id,
         ),
     )
+
+
+def create_password_reset_token(
+    db: Session,
+    *,
+    user_id: int,
+    token_hash: str,
+    expires_at: datetime,
+) -> CCPasswordResetToken:
+    reset_token = CCPasswordResetToken(
+        user_id=user_id,
+        token_hash=token_hash,
+        expires_at=expires_at,
+    )
+
+    db.add(reset_token)
+    db.flush()
+
+    return reset_token
+
+
+def get_password_reset_token(
+    db: Session,
+    *,
+    token_hash: str,
+) -> CCPasswordResetToken | None:
+    statement = (
+        select(CCPasswordResetToken)
+        .where(
+            CCPasswordResetToken.token_hash == token_hash,
+        )
+        .options(
+            selectinload(CCPasswordResetToken.user)
+        )
+    )
+
+    return db.scalar(statement)
+
+
+def invalidate_unused_password_reset_tokens(
+    db: Session,
+    *,
+    user_id: int,
+    used_at: datetime,
+) -> None:
+    statement = (
+        update(CCPasswordResetToken)
+        .where(
+            CCPasswordResetToken.user_id == user_id,
+            CCPasswordResetToken.used_at.is_(None),
+        )
+        .values(
+            used_at=used_at,
+        )
+    )
+
+    db.execute(statement)
+
+
+def revoke_all_user_sessions(
+    db: Session,
+    *,
+    user_id: int,
+    revoked_at: datetime,
+) -> None:
+    statement = (
+        update(CCSession)
+        .where(
+            CCSession.user_id == user_id,
+            CCSession.revoked_at.is_(None),
+        )
+        .values(
+            revoked_at=revoked_at,
+        )
+    )
+
+    db.execute(statement)

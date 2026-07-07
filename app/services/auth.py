@@ -10,19 +10,31 @@ from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
+    ensure_utc,
+    generate_secure_token,
+    hash_password,
     hash_token,
     utc_now,
+    validate_password_strength,
     verify_password,
 )
-from app.models.auth import CCLoginAudit, CCUser
+from app.models.auth import (
+    CCLoginAudit,
+    CCUser,
+    CCUserActivityAudit,
+)
 from app.repositories.auth import (
     collect_clinic_access,
     collect_permission_codes,
     collect_role_codes,
+    create_password_reset_token,
     create_session,
+    get_password_reset_token,
     get_session_by_refresh_token_hash,
     get_user_by_email,
     get_user_by_id,
+    invalidate_unused_password_reset_tokens,
+    revoke_all_user_sessions,
     revoke_session,
 )
 from app.schemas.auth import (
@@ -143,7 +155,10 @@ def authenticate_user(
             detail="User account is inactive.",
         )
 
-    if user.locked_until and user.locked_until > now:
+    if (
+    user.locked_until
+    and ensure_utc(user.locked_until) > now
+    ):
         record_login_attempt(
             db,
             email=normalized_email,
@@ -305,7 +320,10 @@ def refresh_tokens(
 
     now = utc_now()
 
-    if session.revoked_at is not None or session.expires_at <= now:
+    if (
+    session.revoked_at is not None
+    or ensure_utc(session.expires_at) <= now
+    ):
         raise INVALID_REFRESH_TOKEN_ERROR
 
     if not session.user.is_active:
@@ -349,3 +367,242 @@ def logout(
             revoked_at=utc_now(),
         )
         db.commit()
+
+
+
+def change_password(
+    db: Session,
+    *,
+    user: CCUser,
+    current_password: str,
+    new_password: str,
+    confirm_new_password: str,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> None:
+    if new_password != confirm_new_password:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="New password and confirmation do not match.",
+        )
+
+    if not verify_password(
+        current_password,
+        user.password_hash,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect.",
+        )
+
+    if verify_password(
+        new_password,
+        user.password_hash,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "New password must be different "
+                "from the current password."
+            ),
+        )
+
+    try:
+        validate_password_strength(new_password)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+    now = utc_now()
+
+    user.password_hash = hash_password(new_password)
+    user.password_changed_at = now
+    user.must_change_password = False
+    user.failed_login_attempts = 0
+    user.locked_until = None
+
+    revoke_all_user_sessions(
+        db,
+        user_id=user.id,
+        revoked_at=now,
+    )
+
+    db.add(user)
+
+    record_user_activity(
+    db,
+    actor_user_id=user.id,
+    target_user_id=user.id,
+    action="auth.password_changed",
+    resource_type="cc_user",
+    resource_id=str(user.id),
+    ip_address=ip_address,
+    user_agent=user_agent,
+    )
+    db.commit()
+
+
+def request_password_reset(
+    db: Session,
+    *,
+    email: str,
+) -> str | None:
+    normalized_email = email.strip().lower()
+    user = get_user_by_email(db, normalized_email)
+
+    # Do not reveal whether an account exists.
+    if user is None or not user.is_active:
+        return None
+
+    now = utc_now()
+
+    invalidate_unused_password_reset_tokens(
+        db,
+        user_id=user.id,
+        used_at=now,
+    )
+
+    raw_token = generate_secure_token()
+
+    create_password_reset_token(
+        db,
+        user_id=user.id,
+        token_hash=hash_token(raw_token),
+        expires_at=now
+        + timedelta(
+            minutes=settings.password_reset_token_expire_minutes
+        ),
+    )
+
+    db.commit()
+
+    return raw_token
+
+
+def reset_password(
+    db: Session,
+    *,
+    raw_token: str,
+    new_password: str,
+    confirm_new_password: str,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> None:
+    if new_password != confirm_new_password:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="New password and confirmation do not match.",
+        )
+
+    try:
+        validate_password_strength(new_password)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+    reset_token = get_password_reset_token(
+        db,
+        token_hash=hash_token(raw_token),
+    )
+
+    if reset_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired password reset token.",
+        )
+
+    now = utc_now()
+
+    if reset_token.used_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password reset token has already been used.",
+        )
+
+    if ensure_utc(reset_token.expires_at) <= now:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password reset token has expired.",
+        )
+
+    user = reset_token.user
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive.",
+        )
+
+    if verify_password(
+        new_password,
+        user.password_hash,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "New password must be different "
+                "from the existing password."
+            ),
+        )
+
+    user.password_hash = hash_password(new_password)
+    user.password_changed_at = now
+    user.must_change_password = False
+    user.failed_login_attempts = 0
+    user.locked_until = None
+
+    reset_token.used_at = now
+
+    revoke_all_user_sessions(
+        db,
+        user_id=user.id,
+        revoked_at=now,
+    )
+
+    db.add(user)
+    db.add(reset_token)
+
+    record_user_activity(
+    db,
+    actor_user_id=user.id,
+    target_user_id=user.id,
+    action="auth.password_reset",
+    resource_type="cc_user",
+    resource_id=str(user.id),
+    ip_address=ip_address,
+    user_agent=user_agent,
+    )
+    
+    db.commit()
+
+
+def record_user_activity(
+    db: Session,
+    *,
+    actor_user_id: int | None,
+    target_user_id: int | None,
+    action: str,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    clinic_id: int | None = None,
+    details: dict | None = None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> None:
+    db.add(
+        CCUserActivityAudit(
+            actor_user_id=actor_user_id,
+            target_user_id=target_user_id,
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            clinic_id=clinic_id,
+            details=details,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+    )    

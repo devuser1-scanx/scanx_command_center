@@ -51,34 +51,34 @@ def user_has_admin_role(
     return mapping is not None
 
 
-def validate_password(password: str) -> None:
-    if len(password) < 12:
-        raise ValueError(
-            "Password must contain at least 12 characters."
-        )
+# def validate_password(password: str) -> None:
+#     if len(password) < 12:
+#         raise ValueError(
+#             "Password must contain at least 12 characters."
+#         )
 
-    if not any(character.isupper() for character in password):
-        raise ValueError(
-            "Password must contain at least one uppercase letter."
-        )
+#     if not any(character.isupper() for character in password):
+#         raise ValueError(
+#             "Password must contain at least one uppercase letter."
+#         )
 
-    if not any(character.islower() for character in password):
-        raise ValueError(
-            "Password must contain at least one lowercase letter."
-        )
+#     if not any(character.islower() for character in password):
+#         raise ValueError(
+#             "Password must contain at least one lowercase letter."
+#         )
 
-    if not any(character.isdigit() for character in password):
-        raise ValueError(
-            "Password must contain at least one number."
-        )
+#     if not any(character.isdigit() for character in password):
+#         raise ValueError(
+#             "Password must contain at least one number."
+#         )
 
-    if not any(
-        not character.isalnum()
-        for character in password
-    ):
-        raise ValueError(
-            "Password must contain at least one special character."
-        )
+#     if not any(
+#         not character.isalnum()
+#         for character in password
+#     ):
+#         raise ValueError(
+#             "Password must contain at least one special character."
+#         )
 
 
 def bootstrap_admin(
@@ -90,7 +90,7 @@ def bootstrap_admin(
     password: str,
 ) -> None:
     normalized_email = normalize_email(email)
-    validate_password(password)
+    # validate_password(password) # As now hash_password() can validate the passowrd.
 
     with SessionLocal() as db:
         admin_role = get_admin_role(db)

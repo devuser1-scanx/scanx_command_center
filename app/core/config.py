@@ -19,7 +19,8 @@ class Settings(BaseSettings):
 
     auth_max_failed_login_attempts: int = 3
     auth_account_lock_minutes: int = 5
-
+    password_reset_token_expire_minutes: int = 30
+    
     database_url: str | None = None
     database_host: str | None = None
     database_name: str = "scanx_app"
