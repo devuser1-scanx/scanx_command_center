@@ -38,7 +38,7 @@ jobs:
       APP_ENV: test
       DEBUG: "false"
       DATABASE_URL: postgresql+psycopg://test_user:test_password@localhost:5432/test_db
-      JWT_SECRET_KEY: sK1YiuudUE03LagjX7UMQLakL2DUc_MwJIjUxLix6NXK_VucDXUJ6Sl29fxH7T1BSwsuRFfdWp-txZPfMM37rg
+      JWT_SECRET_KEY: test-secret-key-for-ci-that-is-long-enough
       CORS_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:3000
 
     steps:
