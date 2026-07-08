@@ -23,6 +23,18 @@ from app.db.base import Base
 class CCUser(Base):
     __tablename__ = "cc_users"
 
+    __table_args__ = (
+        UniqueConstraint(
+            "email",
+            name="uq_cc_users_email",
+        ),
+        Index(
+            "ix_cc_users_email",
+            "email",
+            unique=True,
+        ),
+    )
+
     id: Mapped[int] = mapped_column(
         BigInteger,
         primary_key=True,
@@ -30,10 +42,8 @@ class CCUser(Base):
     )
 
     email: Mapped[str] = mapped_column(
-        String(320),
-        nullable=False,
-        unique=True,
-        index=True,
+    String(320),
+    nullable=False,
     )
 
     first_name: Mapped[str] = mapped_column(
@@ -160,6 +170,18 @@ class CCUser(Base):
 class CCRole(Base):
     __tablename__ = "cc_roles"
 
+    __table_args__ = (
+        UniqueConstraint(
+            "code",
+            name="uq_cc_roles_code",
+        ),
+        Index(
+            "ix_cc_roles_code",
+            "code",
+            unique=True,
+        ),
+    )
+
     id: Mapped[int] = mapped_column(
         BigInteger,
         primary_key=True,
@@ -167,10 +189,8 @@ class CCRole(Base):
     )
 
     code: Mapped[str] = mapped_column(
-        String(50),
-        nullable=False,
-        unique=True,
-        index=True,
+    String(50),
+    nullable=False,
     )
 
     name: Mapped[str] = mapped_column(
@@ -224,6 +244,22 @@ class CCRole(Base):
 class CCPermission(Base):
     __tablename__ = "cc_permissions"
 
+    __table_args__ = (
+        UniqueConstraint(
+            "code",
+            name="uq_cc_permissions_code",
+        ),
+        Index(
+            "ix_cc_permissions_code",
+            "code",
+            unique=True,
+        ),
+        Index(
+            "ix_cc_permissions_module",
+            "module",
+        ),
+    )
+
     id: Mapped[int] = mapped_column(
         BigInteger,
         primary_key=True,
@@ -231,16 +267,13 @@ class CCPermission(Base):
     )
 
     code: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
-        unique=True,
-        index=True,
+    String(100),
+    nullable=False,
     )
 
     module: Mapped[str] = mapped_column(
-        String(50),
-        nullable=False,
-        index=True,
+    String(50),
+    nullable=False,
     )
 
     name: Mapped[str] = mapped_column(
