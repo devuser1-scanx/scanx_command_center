@@ -84,9 +84,7 @@ def create_user(
     ip_address: str | None,
     user_agent: str | None,
 ) -> UserResponse:
-    normalized_email = normalize_email(
-        str(payload.email)
-    )
+    normalized_email = normalize_email(str(payload.email))
 
     if get_user_by_email(db, normalized_email):
         raise HTTPException(
@@ -95,9 +93,7 @@ def create_user(
         )
 
     try:
-        validate_password_strength(
-            payload.temporary_password
-        )
+        validate_password_strength(payload.temporary_password)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -109,19 +105,10 @@ def create_user(
         payload.role_codes,
     )
 
-    requested_role_codes = {
-        code.strip().lower()
-        for code in payload.role_codes
-        if code.strip()
-    }
-    found_role_codes = {
-        role.code
-        for role in roles
-    }
+    requested_role_codes = {code.strip().lower() for code in payload.role_codes if code.strip()}
+    found_role_codes = {role.code for role in roles}
 
-    missing_roles = (
-        requested_role_codes - found_role_codes
-    )
+    missing_roles = requested_role_codes - found_role_codes
 
     if missing_roles:
         raise HTTPException(
@@ -134,29 +121,19 @@ def create_user(
 
     if (
         payload.primary_clinic_id is not None
-        and payload.primary_clinic_id
-        not in payload.clinic_ids
+        and payload.primary_clinic_id not in payload.clinic_ids
     ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(
-                "primary_clinic_id must be included "
-                "in clinic_ids."
-            ),
+            detail=("primary_clinic_id must be included in clinic_ids."),
         )
 
     user = CCUser(
         email=normalized_email,
         first_name=payload.first_name.strip(),
         last_name=payload.last_name.strip(),
-        phone=(
-            payload.phone.strip()
-            if payload.phone
-            else None
-        ),
-        password_hash=hash_password(
-            payload.temporary_password
-        ),
+        phone=(payload.phone.strip() if payload.phone else None),
+        password_hash=hash_password(payload.temporary_password),
         is_active=True,
         is_email_verified=True,
         must_change_password=True,
@@ -192,9 +169,7 @@ def create_user(
         details={
             "email": user.email,
             "roles": sorted(found_role_codes),
-            "clinic_ids": sorted(
-                set(payload.clinic_ids)
-            ),
+            "clinic_ids": sorted(set(payload.clinic_ids)),
         },
         ip_address=ip_address,
         user_agent=user_agent,
@@ -207,10 +182,7 @@ def create_user(
 
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "The user could not be created because "
-                "of a conflicting record."
-            ),
+            detail=("The user could not be created because of a conflicting record."),
         ) from exc
 
     created_user = get_user_by_id(db, user.id)
@@ -256,10 +228,7 @@ def get_users(
     )
 
     return UserListResponse(
-        items=[
-            build_user_response(user)
-            for user in users
-        ],
+        items=[build_user_response(user) for user in users],
         total=total,
         limit=limit,
         offset=offset,
@@ -277,27 +246,17 @@ def update_user(
 ) -> UserResponse:
     user = get_user_or_404(db, user_id)
 
-    changes = payload.model_dump(
-        exclude_unset=True
-    )
+    changes = payload.model_dump(exclude_unset=True)
 
     if "first_name" in changes:
-        user.first_name = changes[
-            "first_name"
-        ].strip()
+        user.first_name = changes["first_name"].strip()
 
     if "last_name" in changes:
-        user.last_name = changes[
-            "last_name"
-        ].strip()
+        user.last_name = changes["last_name"].strip()
 
     if "phone" in changes:
         phone = changes["phone"]
-        user.phone = (
-            phone.strip()
-            if phone
-            else None
-        )
+        user.phone = phone.strip() if phone else None
 
     user.updated_by_user_id = actor_user.id
 
@@ -334,15 +293,10 @@ def set_user_status(
 ) -> UserResponse:
     user = get_user_or_404(db, user_id)
 
-    if (
-        user.id == actor_user.id
-        and not is_active
-    ):
+    if user.id == actor_user.id and not is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "You cannot deactivate your own account."
-            ),
+            detail=("You cannot deactivate your own account."),
         )
 
     user.is_active = is_active
@@ -359,11 +313,7 @@ def set_user_status(
         db,
         actor_user_id=actor_user.id,
         target_user_id=user.id,
-        action=(
-            "users.activated"
-            if is_active
-            else "users.deactivated"
-        ),
+        action=("users.activated" if is_active else "users.deactivated"),
         resource_type="cc_user",
         resource_id=str(user.id),
         ip_address=ip_address,
@@ -372,9 +322,7 @@ def set_user_status(
 
     db.commit()
 
-    return build_user_response(
-        get_user_or_404(db, user.id)
-    )
+    return build_user_response(get_user_or_404(db, user.id))
 
 
 def unlock_user(
@@ -404,9 +352,7 @@ def unlock_user(
 
     db.commit()
 
-    return build_user_response(
-        get_user_or_404(db, user.id)
-    )
+    return build_user_response(get_user_or_404(db, user.id))
 
 
 def assign_roles(
@@ -425,15 +371,8 @@ def assign_roles(
         role_codes,
     )
 
-    requested = {
-        code.strip().lower()
-        for code in role_codes
-        if code.strip()
-    }
-    found = {
-        role.code
-        for role in roles
-    }
+    requested = {code.strip().lower() for code in role_codes if code.strip()}
+    found = {role.code for role in roles}
 
     missing = requested - found
 
@@ -446,15 +385,10 @@ def assign_roles(
             },
         )
 
-    if (
-        user.id == actor_user.id
-        and "admin" not in found
-    ):
+    if user.id == actor_user.id and "admin" not in found:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "You cannot remove your own admin role."
-            ),
+            detail=("You cannot remove your own admin role."),
         )
 
     replace_user_roles(
@@ -478,9 +412,7 @@ def assign_roles(
 
     db.commit()
 
-    return build_user_response(
-        get_user_or_404(db, user.id)
-    )
+    return build_user_response(get_user_or_404(db, user.id))
 
 
 def assign_clinics(
@@ -495,16 +427,10 @@ def assign_clinics(
 ) -> UserResponse:
     user = get_user_or_404(db, user_id)
 
-    if (
-        primary_clinic_id is not None
-        and primary_clinic_id not in clinic_ids
-    ):
+    if primary_clinic_id is not None and primary_clinic_id not in clinic_ids:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(
-                "primary_clinic_id must be included "
-                "in clinic_ids."
-            ),
+            detail=("primary_clinic_id must be included in clinic_ids."),
         )
 
     replace_user_clinic_access(
@@ -532,9 +458,7 @@ def assign_clinics(
 
     db.commit()
 
-    return build_user_response(
-        get_user_or_404(db, user.id)
-    )
+    return build_user_response(get_user_or_404(db, user.id))
 
 
 def admin_reset_password(
@@ -549,9 +473,7 @@ def admin_reset_password(
     user = get_user_or_404(db, user_id)
 
     try:
-        validate_password_strength(
-            temporary_password
-        )
+        validate_password_strength(temporary_password)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -560,9 +482,7 @@ def admin_reset_password(
 
     now = utc_now()
 
-    user.password_hash = hash_password(
-        temporary_password
-    )
+    user.password_hash = hash_password(temporary_password)
     user.must_change_password = True
     user.password_changed_at = now
     user.failed_login_attempts = 0

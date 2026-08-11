@@ -42,8 +42,8 @@ class CCUser(Base):
     )
 
     email: Mapped[str] = mapped_column(
-    String(320),
-    nullable=False,
+        String(320),
+        nullable=False,
     )
 
     first_name: Mapped[str] = mapped_column(
@@ -189,8 +189,8 @@ class CCRole(Base):
     )
 
     code: Mapped[str] = mapped_column(
-    String(50),
-    nullable=False,
+        String(50),
+        nullable=False,
     )
 
     name: Mapped[str] = mapped_column(
@@ -267,13 +267,13 @@ class CCPermission(Base):
     )
 
     code: Mapped[str] = mapped_column(
-    String(100),
-    nullable=False,
+        String(100),
+        nullable=False,
     )
 
     module: Mapped[str] = mapped_column(
-    String(50),
-    nullable=False,
+        String(50),
+        nullable=False,
     )
 
     name: Mapped[str] = mapped_column(

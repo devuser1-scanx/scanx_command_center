@@ -178,37 +178,22 @@ def test_collectors_ignore_inactive_roles_and_permissions() -> None:
     user = make_user()
 
     assert collect_role_codes(user) == ["admin"]
-    assert collect_permission_codes(user) == [
-        "users.view"
-    ]
+    assert collect_permission_codes(user) == ["users.view"]
 
-    clinic_ids = [
-        access.clinic_id
-        for access in collect_clinic_access(user)
-    ]
+    clinic_ids = [access.clinic_id for access in collect_clinic_access(user)]
 
     assert clinic_ids == [10, 20]
 
 
 def test_build_current_user_response_filters_inactive_access() -> None:
-    response = build_current_user_response(
-        make_user()
-    )
+    response = build_current_user_response(make_user())
 
     assert response.email == "admin@example.com"
-    assert [
-        role.code
-        for role in response.roles
-    ] == ["admin"]
+    assert [role.code for role in response.roles] == ["admin"]
 
-    assert response.permissions == [
-        "users.view"
-    ]
+    assert response.permissions == ["users.view"]
 
-    assert [
-        access.clinic_id
-        for access in response.clinic_access
-    ] == [10, 20]
+    assert [access.clinic_id for access in response.clinic_access] == [10, 20]
 
 
 def test_get_current_user_returns_active_access_token_user(
@@ -230,9 +215,7 @@ def test_get_current_user_returns_active_access_token_user(
         fake_get_user_by_id,
     )
 
-    token = create_access_token(
-        subject=str(user.id)
-    )
+    token = create_access_token(subject=str(user.id))
 
     assert (
         get_current_user(
@@ -249,9 +232,7 @@ def test_get_current_user_rejects_refresh_token() -> None:
         session_id=1,
     )
 
-    with pytest.raises(
-        HTTPException
-    ) as exc_info:
+    with pytest.raises(HTTPException) as exc_info:
         get_current_user(
             token=token,
             db=FakeDb(),
@@ -271,13 +252,9 @@ def test_get_current_user_rejects_inactive_user(
         lambda db, user_id: user,
     )
 
-    token = create_access_token(
-        subject=str(user.id)
-    )
+    token = create_access_token(subject=str(user.id))
 
-    with pytest.raises(
-        HTTPException
-    ) as exc_info:
+    with pytest.raises(HTTPException) as exc_info:
         get_current_user(
             token=token,
             db=FakeDb(),
@@ -289,37 +266,19 @@ def test_get_current_user_rejects_inactive_user(
 def test_role_and_permission_dependencies_allow_matching_user() -> None:
     user = make_user()
 
-    assert (
-        require_role("admin")(
-            current_user=user
-        )
-        is user
-    )
+    assert require_role("admin")(current_user=user) is user
 
-    assert (
-        require_permission("users.view")(
-            current_user=user
-        )
-        is user
-    )
+    assert require_permission("users.view")(current_user=user) is user
 
 
 def test_role_and_permission_dependencies_reject_missing_access() -> None:
     user = make_user()
 
-    with pytest.raises(
-        HTTPException
-    ) as role_error:
-        require_role("front_desk")(
-            current_user=user
-        )
+    with pytest.raises(HTTPException) as role_error:
+        require_role("front_desk")(current_user=user)
 
-    with pytest.raises(
-        HTTPException
-    ) as permission_error:
-        require_permission("users.create")(
-            current_user=user
-        )
+    with pytest.raises(HTTPException) as permission_error:
+        require_permission("users.create")(current_user=user)
 
     assert role_error.value.status_code == 403
     assert permission_error.value.status_code == 403

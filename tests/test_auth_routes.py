@@ -62,9 +62,7 @@ def test_login_route_passes_payload_and_request_metadata(
             ),
         )
 
-    app.dependency_overrides[
-        get_db
-    ] = override_db
+    app.dependency_overrides[get_db] = override_db
 
     monkeypatch.setattr(
         "app.api.v1.routes.auth.login",
@@ -79,9 +77,7 @@ def test_login_route_passes_payload_and_request_metadata(
                 "password": "secret",
             },
             headers={
-                "x-forwarded-for": (
-                    "198.51.100.8, 10.0.0.1"
-                ),
+                "x-forwarded-for": ("198.51.100.8, 10.0.0.1"),
                 "user-agent": "pytest",
             },
         )
@@ -114,9 +110,7 @@ def test_logout_route_revokes_refresh_token(
         captured["db"] = db
         captured["refresh_token"] = refresh_token
 
-    app.dependency_overrides[
-        get_db
-    ] = override_db
+    app.dependency_overrides[get_db] = override_db
 
     monkeypatch.setattr(
         "app.api.v1.routes.auth.logout",
@@ -126,25 +120,18 @@ def test_logout_route_revokes_refresh_token(
     try:
         response = client.post(
             "/auth/logout",
-            json={
-                "refresh_token": "refresh"
-            },
+            json={"refresh_token": "refresh"},
         )
     finally:
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    assert response.json() == {
-        "message": "Logged out successfully."
-    }
+    assert response.json() == {"message": "Logged out successfully."}
     assert isinstance(
         captured["db"],
         FakeDb,
     )
-    assert (
-        captured["refresh_token"]
-        == "refresh"
-    )
+    assert captured["refresh_token"] == "refresh"
 
 
 def test_me_route_returns_current_user(
@@ -166,19 +153,12 @@ def test_me_route_returns_current_user(
     user.roles = []
     user.clinic_access = []
 
-    app.dependency_overrides[
-        get_current_user
-    ] = lambda: user
+    app.dependency_overrides[get_current_user] = lambda: user
 
     try:
-        response = client.get(
-            "/auth/me"
-        )
+        response = client.get("/auth/me")
     finally:
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    assert (
-        response.json()["email"]
-        == "admin@example.com"
-    )
+    assert response.json()["email"] == "admin@example.com"

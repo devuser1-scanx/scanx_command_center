@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     database_user: str = "postgres"
     database_password: str | None = None
 
+    # Read-only connection to the existing production ScanX database
+    # (appointment/clinics/patients, etc.). Command Center never writes to
+    # this database and never runs migrations against it.
+    prod_database_url: str | None = None
+    dashboard_poll_interval_seconds: int = 5
+
     jwt_secret_key: Annotated[str, Field(min_length=32)] = (
         "change-me-for-local-development-only-123456"
     )
