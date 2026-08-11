@@ -11,6 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 from app.core.security import hash_password
+
 # Revision identifiers, used by Alembic.
 revision = "0004_seed_initial_admin"
 down_revision = "0003"
