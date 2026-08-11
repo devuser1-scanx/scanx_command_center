@@ -1,0 +1,9 @@
+# GHSA-6v7p-g79w-8964 – msgpack vendored *inside pip itself* (pip/_vendor/msgpack)
+# for pip's own HTTP cache. Not our app's msgpack dep (pinned to 1.2.1, already clean).
+# Not reachable at runtime — the app never imports pip.
+GHSA-6v7p-g79w-8964
+
+# CVE-2025-47273 – old setuptools wheel bundled for ensurepip's bootstrap use, separate
+# from the setuptools we pin to >=78.1.1 in the Dockerfile (already clean at 84.0.0).
+# Not reachable at runtime.
+CVE-2025-47273
