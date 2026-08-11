@@ -9,9 +9,13 @@ WORKDIR /app
 RUN addgroup --system scanx && adduser --system --ingroup scanx scanx
 
 COPY requirements.txt .
-RUN python -m pip install --no-cache-dir --upgrade pip && \
-    python -m pip install --no-cache-dir -r requirements.txt && \
-    python -m pip uninstall -y setuptools wheel
+RUN python -m pip install --no-cache-dir --upgrade \
+        pip \
+        "setuptools>=78.1.1" \
+        wheel && \
+    python -m pip install --no-cache-dir --upgrade --force-reinstall \
+        -r requirements.txt && \
+    python -m pip check
 
 COPY alembic.ini .
 COPY migrations ./migrations

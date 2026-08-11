@@ -165,9 +165,16 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -t $IMAGE_URI \
-            -t $LATEST_IMAGE_URI \
+            --pull \
+            --no-cache \
+            -t "$IMAGE_URI" \
+            -t "$LATEST_IMAGE_URI" \
             .
+
+      - name: Verify patched Python packages
+        run: |
+          docker run --rm "$IMAGE_URI" python -c \
+            "from importlib.metadata import version; print('msgpack:', version('msgpack')); print('setuptools:', version('setuptools'))"
 
       - name: Scan Docker image
         uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8
@@ -180,8 +187,8 @@ jobs:
 
       - name: Push Docker image
         run: |
-          docker push $IMAGE_URI
-          docker push $LATEST_IMAGE_URI
+          docker push "$IMAGE_URI"
+          docker push "$LATEST_IMAGE_URI"
 
       - name: Deploy to Cloud Run Staging
         id: deploy
@@ -264,9 +271,16 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -t $IMAGE_URI \
-            -t $LATEST_IMAGE_URI \
+            --pull \
+            --no-cache \
+            -t "$IMAGE_URI" \
+            -t "$LATEST_IMAGE_URI" \
             .
+
+      - name: Verify patched Python packages
+        run: |
+          docker run --rm "$IMAGE_URI" python -c \
+            "from importlib.metadata import version; print('msgpack:', version('msgpack')); print('setuptools:', version('setuptools'))"
 
       - name: Scan Docker image
         uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8
@@ -279,8 +293,8 @@ jobs:
 
       - name: Push Docker image
         run: |
-          docker push $IMAGE_URI
-          docker push $LATEST_IMAGE_URI
+          docker push "$IMAGE_URI"
+          docker push "$LATEST_IMAGE_URI"
 
       - name: Deploy to Cloud Run Production
         id: deploy
