@@ -7,7 +7,6 @@ from app import models  # noqa: F401
 from app.core.config import settings
 from app.db.base import Base
 
-
 config = context.config
 
 # The application safely URL-encodes special password characters.
