@@ -206,7 +206,7 @@ jobs:
             --service-account="$RUNTIME_SERVICE_ACCOUNT" \
             --set-cloudsql-instances="$CLOUDSQL_INSTANCE" \
             --set-env-vars="APP_ENV=staging,DEBUG=false,APP_NAME=scanx-command-center-api-staging,DATABASE_HOST=/cloudsql/$CLOUDSQL_INSTANCE,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER" \
-            --set-secrets="DATABASE_PASSWORD=scanx-staging-db-password:latest,JWT_SECRET_KEY=scanx-staging-jwt-secret:latest" \
+            --set-secrets="DATABASE_PASSWORD=scanx-staging-db-password:latest,JWT_SECRET_KEY=scanx-staging-jwt-secret:latest,INITIAL_ADMIN_PASSWORD=scanx-staging-initial-admin-password:latest" \
             --command="alembic" \
             --args="upgrade,head" \
             --tasks=1 \
