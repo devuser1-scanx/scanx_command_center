@@ -7,14 +7,13 @@ from app import models  # noqa: F401
 from app.core.config import settings
 from app.db.base import Base
 
+
 config = context.config
 
-# The application safely URL-encodes special password characters.
-# For example, "@" becomes "%40".
 database_url = str(settings.sqlalchemy_database_uri)
 
-# Alembic stores this value through ConfigParser, where "%" is used for
-# interpolation. Escape it so encoded values such as "%40" remain valid.
+# Password characters such as "@" are URL-encoded as "%40".
+# ConfigParser requires percent characters to be escaped.
 alembic_database_url = database_url.replace("%", "%%")
 
 config.set_main_option(
@@ -27,17 +26,18 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+# This service must not share Alembic history with other ScanX services.
+VERSION_TABLE = "command_center_alembic_version"
+
 
 def run_migrations_offline() -> None:
-    """Run migrations without creating a database connection."""
-
     context.configure(
-        # This value is passed directly to Alembic, so use the normal URL.
         url=database_url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        version_table=VERSION_TABLE,
     )
 
     with context.begin_transaction():
@@ -45,8 +45,6 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations using a live database connection."""
-
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
@@ -58,6 +56,7 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
+            version_table=VERSION_TABLE,
         )
 
         with context.begin_transaction():
