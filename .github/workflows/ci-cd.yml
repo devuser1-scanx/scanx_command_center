@@ -43,7 +43,7 @@ jobs:
       DEBUG: "false"
       DATABASE_URL: postgresql+psycopg://test_user:test_password@localhost:5432/test_db
       JWT_SECRET_KEY: test-secret-key-for-ci-that-is-long-enough
-      CORS_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:3000
+      CORS_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:3000,https://scanx-command-center-fe-794794356928.us-central1.run.app
 
     steps:
       - name: Checkout

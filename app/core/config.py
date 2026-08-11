@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 7
 
-    cors_allowed_origins: str = "http://localhost:5173,http://localhost:3000"
+    cors_allowed_origins: str = "http://localhost:5173,http://localhost:3000,https://scanx-command-center-fe-794794356928.us-central1.run.app"
 
     @property
     def cors_origins_list(self) -> list[str]:

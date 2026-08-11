@@ -1,0 +1,30 @@
+Rev: 0003 (head)
+Parent: 0002
+Path: C:\Latitude_Projects\ScanX\Command_Center\scanx_command_center_BE\migrations\versions\0003_grant_dashboard_permissions.py
+
+    grant dashboard/appointments/clinics view permissions to front_desk and sonographer
+    
+    Revision ID: 0003
+    Revises: 0002
+    Create Date: 2026-08-06
+
+Rev: 0002
+Parent: 0001
+Path: C:\Latitude_Projects\ScanX\Command_Center\scanx_command_center_BE\migrations\versions\0002_command_center_auth_foundation.py
+
+    create command center authentication foundation
+    
+    Revision ID: 0002
+    Revises: 0001
+    Create Date: 2026-07-07
+
+Rev: 0001
+Parent: <base>
+Path: C:\Latitude_Projects\ScanX\Command_Center\scanx_command_center_BE\migrations\versions\0001_initial_command_center_tables.py
+
+    initial test table
+    
+    Revision ID: 0001
+    Revises:
+    Create Date: 2026-06-26
+
