@@ -56,9 +56,7 @@ def create_command_center_user(
     payload: UserCreateRequest,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: CCUser = Depends(
-        require_permission("users.create")
-    ),
+    current_user: CCUser = Depends(require_permission("users.create")),
 ) -> UserResponse:
     return create_user(
         db,
@@ -91,9 +89,7 @@ def list_command_center_users(
         default=None,
     ),
     db: Session = Depends(get_db),
-    current_user: CCUser = Depends(
-        require_permission("users.view")
-    ),
+    current_user: CCUser = Depends(require_permission("users.view")),
 ) -> UserListResponse:
     del current_user
 
@@ -113,15 +109,11 @@ def list_command_center_users(
 def get_command_center_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: CCUser = Depends(
-        require_permission("users.view")
-    ),
+    current_user: CCUser = Depends(require_permission("users.view")),
 ) -> UserResponse:
     del current_user
 
-    return build_user_response(
-        get_user_or_404(db, user_id)
-    )
+    return build_user_response(get_user_or_404(db, user_id))
 
 
 @router.patch(
@@ -133,9 +125,7 @@ def update_command_center_user(
     payload: UserUpdateRequest,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: CCUser = Depends(
-        require_permission("users.update")
-    ),
+    current_user: CCUser = Depends(require_permission("users.update")),
 ) -> UserResponse:
     return update_user(
         db,
@@ -156,9 +146,7 @@ def update_command_center_user_status(
     payload: UserStatusRequest,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: CCUser = Depends(
-        require_permission("users.deactivate")
-    ),
+    current_user: CCUser = Depends(require_permission("users.deactivate")),
 ) -> UserResponse:
     return set_user_status(
         db,
@@ -178,9 +166,7 @@ def unlock_command_center_user(
     user_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: CCUser = Depends(
-        require_permission("users.update")
-    ),
+    current_user: CCUser = Depends(require_permission("users.update")),
 ) -> UserResponse:
     return unlock_user(
         db,
@@ -200,9 +186,7 @@ def update_command_center_user_roles(
     payload: UserRoleAssignmentRequest,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: CCUser = Depends(
-        require_permission("users.assign_role")
-    ),
+    current_user: CCUser = Depends(require_permission("users.assign_role")),
 ) -> UserResponse:
     return assign_roles(
         db,
@@ -223,9 +207,7 @@ def update_command_center_user_clinics(
     payload: UserClinicAssignmentRequest,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: CCUser = Depends(
-        require_permission("users.assign_clinic")
-    ),
+    current_user: CCUser = Depends(require_permission("users.assign_clinic")),
 ) -> UserResponse:
     return assign_clinics(
         db,
@@ -247,9 +229,7 @@ def reset_user_password_as_admin(
     payload: AdminPasswordResetRequest,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: CCUser = Depends(
-        require_permission("users.update")
-    ),
+    current_user: CCUser = Depends(require_permission("users.update")),
 ) -> MessageResponse:
     admin_reset_password(
         db,
@@ -261,8 +241,5 @@ def reset_user_password_as_admin(
     )
 
     return MessageResponse(
-        message=(
-            "Temporary password assigned successfully. "
-            "The user must change it after login."
-        )
+        message=("Temporary password assigned successfully. The user must change it after login.")
     )

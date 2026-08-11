@@ -26,11 +26,7 @@ def get_user_by_id(
     db: Session,
     user_id: int,
 ) -> CCUser | None:
-    statement = (
-        select(CCUser)
-        .where(CCUser.id == user_id)
-        .options(*user_query_options())
-    )
+    statement = select(CCUser).where(CCUser.id == user_id).options(*user_query_options())
 
     return db.scalar(statement)
 
@@ -40,11 +36,7 @@ def get_user_by_email(
     email: str,
 ) -> CCUser | None:
     statement = (
-        select(CCUser)
-        .where(
-            CCUser.email == normalize_email(email)
-        )
-        .options(*user_query_options())
+        select(CCUser).where(CCUser.email == normalize_email(email)).options(*user_query_options())
     )
 
     return db.scalar(statement)
@@ -74,13 +66,9 @@ def list_users(
         )
 
     if is_active is not None:
-        filters.append(
-            CCUser.is_active == is_active
-        )
+        filters.append(CCUser.is_active == is_active)
 
-    count_statement = select(
-        func.count(CCUser.id)
-    ).where(*filters)
+    count_statement = select(func.count(CCUser.id)).where(*filters)
 
     total = db.scalar(count_statement) or 0
 
@@ -96,9 +84,7 @@ def list_users(
         .offset(offset)
     )
 
-    users = list(
-        db.scalars(statement).unique().all()
-    )
+    users = list(db.scalars(statement).unique().all())
 
     return users, total
 
@@ -107,13 +93,7 @@ def get_roles_by_codes(
     db: Session,
     role_codes: list[str],
 ) -> list[CCRole]:
-    normalized_codes = sorted(
-        {
-            code.strip().lower()
-            for code in role_codes
-            if code.strip()
-        }
-    )
+    normalized_codes = sorted({code.strip().lower() for code in role_codes if code.strip()})
 
     if not normalized_codes:
         return []
@@ -162,9 +142,7 @@ def replace_user_clinic_access(
         user.clinic_access.append(
             CCUserClinicAccess(
                 clinic_id=clinic_id,
-                is_primary=(
-                    primary_clinic_id == clinic_id
-                ),
+                is_primary=(primary_clinic_id == clinic_id),
                 assigned_by_user_id=assigned_by_user_id,
             )
         )

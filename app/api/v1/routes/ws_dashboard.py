@@ -144,16 +144,12 @@ async def poll_dashboard_timeline_loop() -> None:
             try:
                 snapshot = await asyncio.to_thread(fetch_snapshot, clinic_id)
             except Exception:
-                logger.exception(
-                    "Dashboard timeline poll failed for clinic_id=%s", clinic_id
-                )
+                logger.exception("Dashboard timeline poll failed for clinic_id=%s", clinic_id)
                 continue
 
             if manager.has_changed(clinic_id, snapshot.appointments):
                 manager.set_last_snapshot(clinic_id, snapshot.appointments)
-                await manager.broadcast(
-                    clinic_id, _snapshot_message("timeline.update", snapshot)
-                )
+                await manager.broadcast(clinic_id, _snapshot_message("timeline.update", snapshot))
 
 
 @router.websocket("/ws/dashboard/timeline")

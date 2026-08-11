@@ -95,11 +95,7 @@ def ensure_role(
     code: str,
     name: str,
 ) -> CCRole:
-    role = db.scalar(
-        select(CCRole).where(
-            CCRole.code == code
-        )
-    )
+    role = db.scalar(select(CCRole).where(CCRole.code == code))
 
     if role is None:
         role = CCRole(
@@ -122,11 +118,7 @@ def ensure_permission(
     module: str,
     name: str,
 ) -> CCPermission:
-    permission = db.scalar(
-        select(CCPermission).where(
-            CCPermission.code == code
-        )
-    )
+    permission = db.scalar(select(CCPermission).where(CCPermission.code == code))
 
     if permission is None:
         permission = CCPermission(
@@ -236,17 +228,10 @@ def create_test_user(
     is_active: bool = True,
     must_change_password: bool = False,
 ) -> CCUser:
-    role = db.scalar(
-        select(CCRole).where(
-            CCRole.code == role_code
-        )
-    )
+    role = db.scalar(select(CCRole).where(CCRole.code == role_code))
 
     if role is None:
-        raise RuntimeError(
-            f"Required test role "
-            f"'{role_code}' does not exist."
-        )
+        raise RuntimeError(f"Required test role '{role_code}' does not exist.")
 
     user = CCUser(
         email=email.strip().lower(),
@@ -354,9 +339,7 @@ def client(
     ]:
         yield db_session
 
-    app.dependency_overrides[
-        get_db
-    ] = override_get_db
+    app.dependency_overrides[get_db] = override_get_db
 
     try:
         with TestClient(app) as test_client:
@@ -465,12 +448,7 @@ def admin_tokens(
 def admin_auth_headers(
     admin_tokens: dict[str, str],
 ) -> dict[str, str]:
-    return {
-        "Authorization": (
-            "Bearer "
-            f"{admin_tokens['access_token']}"
-        )
-    }
+    return {"Authorization": (f"Bearer {admin_tokens['access_token']}")}
 
 
 @pytest.fixture
@@ -501,9 +479,4 @@ def sonographer_tokens(
 def sonographer_auth_headers(
     sonographer_tokens: dict[str, str],
 ) -> dict[str, str]:
-    return {
-        "Authorization": (
-            "Bearer "
-            f"{sonographer_tokens['access_token']}"
-        )
-    }
+    return {"Authorization": (f"Bearer {sonographer_tokens['access_token']}")}

@@ -18,6 +18,8 @@ from app.repositories.patients import (
     list_messages,
     list_reports,
     list_uploads,
+)
+from app.repositories.patients import (
     search_patients as search_patients_repository,
 )
 from app.schemas.patients import (
@@ -73,9 +75,7 @@ def _build_visit_summary(
         tone=tone,
         price=float(appointment.price) if appointment.price is not None else None,
         amount_paid=(
-            float(appointment.amount_paid)
-            if appointment.amount_paid is not None
-            else None
+            float(appointment.amount_paid) if appointment.amount_paid is not None else None
         ),
         paid=appointment.paid,
     )
@@ -113,9 +113,7 @@ def search_patients(
                 patient=build_patient_name(latest),
                 appointment_count=len(group),
                 latest_appointment_id=latest.appointment_id,
-                latest_clinic_name=clinic_names.get(
-                    latest.clinic_id, "Unknown Clinic"
-                ),
+                latest_clinic_name=clinic_names.get(latest.clinic_id, "Unknown Clinic"),
                 latest_exam=latest.appointment_type or latest.category or "Exam",
                 latest_time=build_local_time(latest, clinic_timezone),
                 latest_status=status_label,
@@ -149,9 +147,7 @@ def get_patient_profile(
         else [appointment]
     )
 
-    if appointment.appointment_id not in {
-        visit.appointment_id for visit in visit_appointments
-    }:
+    if appointment.appointment_id not in {visit.appointment_id for visit in visit_appointments}:
         visit_appointments.append(appointment)
 
     visits = [
@@ -202,11 +198,7 @@ def get_patient_profile(
         FormStatusItem(
             source="form_status",
             form_type=None,
-            status=(
-                "Sent"
-                if row.sent_status
-                else "Not sent"
-            ),
+            status=("Sent" if row.sent_status else "Not sent"),
             sent_at=row.sent_at,
             submitted_at=None,
         )
@@ -267,9 +259,7 @@ def get_patient_profile(
     payment = PaymentInfo(
         price=float(appointment.price) if appointment.price is not None else None,
         amount_paid=(
-            float(appointment.amount_paid)
-            if appointment.amount_paid is not None
-            else None
+            float(appointment.amount_paid) if appointment.amount_paid is not None else None
         ),
         paid=appointment.paid,
         payment_link=appointment.payment_link,

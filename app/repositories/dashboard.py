@@ -94,9 +94,7 @@ def list_reported_appointment_ids(
     if not appointment_ids:
         return set()
 
-    statement = select(Report.appointment_id).where(
-        Report.appointment_id.in_(appointment_ids)
-    )
+    statement = select(Report.appointment_id).where(Report.appointment_id.in_(appointment_ids))
 
     return {
         appointment_id

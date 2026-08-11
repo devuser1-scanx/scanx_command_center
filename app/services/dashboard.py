@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
@@ -139,7 +139,7 @@ def get_dashboard_summary(
     day: date,
 ) -> DashboardSummaryResponse:
     appointments = list_appointments_for_day(prod_db, clinic_id=None, day=day)
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
 
     confirmed = 0
     checked_in = 0
