@@ -1,3 +1,8 @@
+"""Seed the initial administrator account.
+
+Revision ID: 0004_seed_initial_admin
+Revises: 0003
+"""
 from __future__ import annotations
 
 import os
@@ -6,7 +11,11 @@ import sqlalchemy as sa
 from alembic import op
 
 from app.core.security import hash_password
-
+# Revision identifiers, used by Alembic.
+revision = "0004_seed_initial_admin"
+down_revision = "0003"
+branch_labels = None
+depends_on = None
 
 def upgrade() -> None:
     connection = op.get_bind()

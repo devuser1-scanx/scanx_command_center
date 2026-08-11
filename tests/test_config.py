@@ -17,6 +17,7 @@ def test_cors_origins_are_split_and_trimmed() -> None:
     assert settings.cors_origins_list == [
         "http://localhost:3000",
         "https://scanx.test",
+        "https://scanx-command-center-fe-794794356928.us-central1.run.app/"
     ]
 
 
