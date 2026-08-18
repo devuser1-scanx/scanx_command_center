@@ -6,6 +6,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# python:3.11-slim's Debian package snapshot lags behind upstream security
+# fixes (e.g. util-linux CVEs) - pulling the latest patches here is what the
+# Trivy scan in CI expects, since it flags known-fixed CVEs still present in
+# the base image's installed versions.
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    rm -rf /var/lib/apt/lists/*
+
 RUN addgroup --system scanx && adduser --system --ingroup scanx scanx
 
 COPY requirements.txt .
