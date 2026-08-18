@@ -36,7 +36,17 @@ GCP_SERVICE_ACCOUNT=github-actions-deployer@your-gcp-project-id.iam.gserviceacco
 ```text
 scanx-db-password
 scanx-jwt-secret
+scanx-prod-database-url
 ```
+
+`scanx-prod-database-url` is the read-only connection string to the existing
+production ScanX database (appointments/clinics/patients) that the dashboard,
+clinics, and patients features read from - see `app/db/prod_session.py`. It is
+injected as `PROD_DATABASE_URL` via `--set-secrets` on both the staging and
+production Cloud Run deploy steps. Because `--set-secrets`/`--set-env-vars`
+fully replace a revision's configuration rather than merging with it, any
+value set by hand outside this workflow (e.g. via the console) will be wiped
+out on the next deploy - it must stay defined here to persist.
 
 ## Pipeline Flow
 

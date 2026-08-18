@@ -141,6 +141,7 @@ Store production runtime secrets in GCP Secret Manager:
 ```text
 scanx-db-password
 scanx-jwt-secret
+scanx-prod-database-url
 ```
 
 The workflow in `.github/workflows/ci-cd.yml` runs linting, tests, Alembic migrations,
