@@ -42,6 +42,12 @@ class Settings(BaseSettings):
 
     cors_allowed_origins: str = "http://localhost:5173,http://localhost:3000,https://scanx-command-center-fe-794794356928.us-central1.run.app"
 
+    # westfax_base_url: str = "https://api.westfax.com/Polka.Api/REST"
+    # westfax_username: str | None = None
+    # westfax_password: str | None = None
+    # westfax_product_id: str | None = None
+    # westfax_fax_header: str = "ScanX Command Center"
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]

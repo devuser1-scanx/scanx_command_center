@@ -50,39 +50,42 @@ def authenticate_ws_user(token: str, db: Session) -> CCUser | None:
     return user
 
 
-def fetch_snapshot(clinic_id: int | None) -> DashboardTimelineResponse:
+SubscriptionKey = tuple[int | None, date]
+
+
+def fetch_snapshot(clinic_id: int | None, day: date) -> DashboardTimelineResponse:
     session_factory = get_prod_session_factory()
     db = session_factory()
 
     try:
-        return get_dashboard_timeline(db, clinic_id=clinic_id, day=date.today())
+        return get_dashboard_timeline(db, clinic_id=clinic_id, day=day)
     finally:
         db.close()
 
 
 class ConnectionManager:
     """
-    Tracks WebSocket subscribers per clinic_id (None = "all clinics") for
-    this process only. Each gunicorn worker runs its own instance - a
-    client connected to worker A only receives broadcasts triggered by
-    worker A's own poll loop, which is correct since every worker polls
-    the same source data independently. No cross-worker coordination
-    (e.g. Redis pub/sub) is needed at this scale.
+    Tracks WebSocket subscribers per (clinic_id, date) - None clinic_id
+    means "all clinics" - for this process only. Each gunicorn worker runs
+    its own instance - a client connected to worker A only receives
+    broadcasts triggered by worker A's own poll loop, which is correct
+    since every worker polls the same source data independently. No
+    cross-worker coordination (e.g. Redis pub/sub) is needed at this scale.
     """
 
     def __init__(self) -> None:
-        self._connections: dict[int | None, set[WebSocket]] = {}
-        self._last_snapshot: dict[int | None, list[dict]] = {}
+        self._connections: dict[SubscriptionKey, set[WebSocket]] = {}
+        self._last_snapshot: dict[SubscriptionKey, list[dict]] = {}
         self._lock = asyncio.Lock()
 
-    async def connect(self, websocket: WebSocket, clinic_id: int | None) -> None:
+    async def connect(self, websocket: WebSocket, key: SubscriptionKey) -> None:
         await websocket.accept()
 
         async with self._lock:
-            self._connections.setdefault(clinic_id, set()).add(websocket)
+            self._connections.setdefault(key, set()).add(websocket)
 
-    def disconnect(self, websocket: WebSocket, clinic_id: int | None) -> None:
-        connections = self._connections.get(clinic_id)
+    def disconnect(self, websocket: WebSocket, key: SubscriptionKey) -> None:
+        connections = self._connections.get(key)
 
         if not connections:
             return
@@ -90,9 +93,9 @@ class ConnectionManager:
         connections.discard(websocket)
 
         if not connections:
-            self._connections.pop(clinic_id, None)
+            self._connections.pop(key, None)
 
-    def active_clinic_ids(self) -> list[int | None]:
+    def active_keys(self) -> list[SubscriptionKey]:
         return list(self._connections.keys())
 
     @staticmethod
@@ -100,21 +103,21 @@ class ConnectionManager:
         return [appointment.model_dump() for appointment in appointments]
 
     def set_last_snapshot(
-        self, clinic_id: int | None, appointments: list[TimelineAppointmentResponse]
+        self, key: SubscriptionKey, appointments: list[TimelineAppointmentResponse]
     ) -> None:
-        self._last_snapshot[clinic_id] = self._serialize(appointments)
+        self._last_snapshot[key] = self._serialize(appointments)
 
     def has_changed(
-        self, clinic_id: int | None, appointments: list[TimelineAppointmentResponse]
+        self, key: SubscriptionKey, appointments: list[TimelineAppointmentResponse]
     ) -> bool:
-        return self._last_snapshot.get(clinic_id) != self._serialize(appointments)
+        return self._last_snapshot.get(key) != self._serialize(appointments)
 
-    async def broadcast(self, clinic_id: int | None, message: dict) -> None:
-        for websocket in list(self._connections.get(clinic_id, set())):
+    async def broadcast(self, key: SubscriptionKey, message: dict) -> None:
+        for websocket in list(self._connections.get(key, set())):
             try:
                 await websocket.send_json(message)
             except Exception:
-                self.disconnect(websocket, clinic_id)
+                self.disconnect(websocket, key)
 
 
 manager = ConnectionManager()
@@ -132,24 +135,31 @@ def _snapshot_message(message_type: str, snapshot: DashboardTimelineResponse) ->
 async def poll_dashboard_timeline_loop() -> None:
     """
     Background task (started from the app lifespan) that re-reads the
-    production DB for every clinic_id with active WebSocket subscribers and
-    broadcasts a fresh snapshot when it differs from the last one sent.
-    There is no trigger/CDC mechanism available on the production database,
-    so this poll is what makes the WebSocket "live" from the browser's side.
+    production DB for every (clinic_id, date) with active WebSocket
+    subscribers and broadcasts a fresh snapshot when it differs from the
+    last one sent. There is no trigger/CDC mechanism available on the
+    production database, so this poll is what makes the WebSocket "live"
+    from the browser's side. Past/future dates are polled too (subscribers
+    can be viewing any day), but since their data doesn't change they just
+    never produce a broadcast after the initial snapshot.
     """
     while True:
         await asyncio.sleep(settings.dashboard_poll_interval_seconds)
 
-        for clinic_id in manager.active_clinic_ids():
+        for key in manager.active_keys():
+            clinic_id, day = key
+
             try:
-                snapshot = await asyncio.to_thread(fetch_snapshot, clinic_id)
+                snapshot = await asyncio.to_thread(fetch_snapshot, clinic_id, day)
             except Exception:
-                logger.exception("Dashboard timeline poll failed for clinic_id=%s", clinic_id)
+                logger.exception(
+                    "Dashboard timeline poll failed for clinic_id=%s date=%s", clinic_id, day
+                )
                 continue
 
-            if manager.has_changed(clinic_id, snapshot.appointments):
-                manager.set_last_snapshot(clinic_id, snapshot.appointments)
-                await manager.broadcast(clinic_id, _snapshot_message("timeline.update", snapshot))
+            if manager.has_changed(key, snapshot.appointments):
+                manager.set_last_snapshot(key, snapshot.appointments)
+                await manager.broadcast(key, _snapshot_message("timeline.update", snapshot))
 
 
 @router.websocket("/ws/dashboard/timeline")
@@ -157,6 +167,7 @@ async def dashboard_timeline_ws(
     websocket: WebSocket,
     token: str = Query(...),
     clinic_id: int | None = Query(default=None),
+    date_param: str | None = Query(default=None, alias="date"),
     db: Session = Depends(get_db),
 ) -> None:
     user = authenticate_ws_user(token, db)
@@ -165,11 +176,18 @@ async def dashboard_timeline_ws(
         await websocket.close(code=WS_UNAUTHORIZED_CLOSE_CODE)
         return
 
-    await manager.connect(websocket, clinic_id)
+    try:
+        day = date.fromisoformat(date_param) if date_param else date.today()
+    except ValueError:
+        day = date.today()
+
+    key: SubscriptionKey = (clinic_id, day)
+
+    await manager.connect(websocket, key)
 
     try:
-        snapshot = await asyncio.to_thread(fetch_snapshot, clinic_id)
-        manager.set_last_snapshot(clinic_id, snapshot.appointments)
+        snapshot = await asyncio.to_thread(fetch_snapshot, clinic_id, day)
+        manager.set_last_snapshot(key, snapshot.appointments)
         await websocket.send_json(_snapshot_message("timeline.snapshot", snapshot))
 
         while True:
@@ -179,4 +197,4 @@ async def dashboard_timeline_ws(
     except WebSocketDisconnect:
         pass
     finally:
-        manager.disconnect(websocket, clinic_id)
+        manager.disconnect(websocket, key)

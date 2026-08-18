@@ -30,6 +30,12 @@ def derive_status_and_tone(appointment: Appointment) -> tuple[str, Tone]:
     status_label=NULL but checkin=True). This precedence order is a
     best-effort interpretation of that data, not an authored spec - it
     should be validated against what clinic staff actually expect to see.
+
+    Uses `token_used` (whether the patient actually used their self-check-in
+    link/token, alongside `checkin_token`/`checked_in_at`/`token_expiry`)
+    rather than the `checkin` column - `checkin` was observed getting set
+    without a matching real arrival, while `token_used` tracks the actual
+    check-in action.
     """
     status_label = (appointment.status_label or "").strip()
 
@@ -42,7 +48,7 @@ def derive_status_and_tone(appointment: Appointment) -> tuple[str, Tone]:
     if status_label in ("Completed", "Complete"):
         return "Completed", "green"
 
-    if appointment.checkin:
+    if appointment.token_used:
         return "Checked In", "orange"
 
     if appointment.confirmed or status_label == "Confirmed":
@@ -103,6 +109,7 @@ def get_dashboard_timeline(
                 clinic_timezone=clinic_timezones.get(appointment.clinic_id),
             )
             for appointment in appointments
+            if not appointment.canceled
         ],
     )
 
@@ -119,7 +126,7 @@ def is_late(appointment: Appointment, *, now_utc: datetime) -> bool:
     if appointment.canceled:
         return False
 
-    if appointment.checkin:
+    if appointment.token_used:
         return False
 
     status_label = (appointment.status_label or "").strip()

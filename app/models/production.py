@@ -62,6 +62,7 @@ class Appointment(ProdBase):
     status_label: Mapped[str | None] = mapped_column(String(50), nullable=True)
     confirmed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     checkin: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    token_used: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     canceled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     prep_ack: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 

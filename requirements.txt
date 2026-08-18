@@ -11,6 +11,7 @@ PyJWT==2.13.0
 pwdlib[argon2]==0.2.1
 email-validator==2.2.0
 python-multipart==0.0.31
+httpx==0.28.1
 
 # Not a direct dependency - pulled in transitively (observed inside the
 # built Docker image, not in the local dev venv). Pinned explicitly to
