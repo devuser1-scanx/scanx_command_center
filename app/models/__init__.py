@@ -10,6 +10,7 @@ from app.models.auth import (
     CCUserClinicAccess,
     CCUserRole,
 )
+from app.models.fax import CCFaxTransmission
 
 __all__ = [
     "CCUser",
@@ -22,4 +23,5 @@ __all__ = [
     "CCPasswordResetToken",
     "CCLoginAudit",
     "CCUserActivityAudit",
+    "CCFaxTransmission",
 ]

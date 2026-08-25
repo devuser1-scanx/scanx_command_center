@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.dependencies.auth import require_permission
 from app.db.prod_session import get_prod_db
+from app.db.session import get_db
 from app.models.auth import CCUser
+from app.schemas.fax import FaxReportLookupResponse, SendFaxResponse
 from app.schemas.patients import PatientProfileResponse, PatientSearchResponse
+from app.services.fax import lookup_patient_report, send_patient_fax
 from app.services.patients import get_patient_profile, search_patients
 
 router = APIRouter(prefix="/patients")
@@ -35,3 +38,33 @@ def get_patient_profile_route(
     current_user: CCUser = Depends(require_permission("patients.view")),
 ) -> PatientProfileResponse:
     return get_patient_profile(prod_db, appointment_id)
+
+
+@router.get("/{appointment_id}/fax/report", response_model=FaxReportLookupResponse)
+def lookup_patient_report_route(
+    appointment_id: str,
+    prod_db: Session = Depends(get_prod_db),
+    current_user: CCUser = Depends(require_permission("patients.fax")),
+) -> FaxReportLookupResponse:
+    return lookup_patient_report(prod_db, appointment_id)
+
+
+@router.post("/{appointment_id}/fax", response_model=SendFaxResponse)
+def send_fax_route(
+    appointment_id: str,
+    destination_number: str = Form(...),
+    include_report: bool = Form(True),
+    files: list[UploadFile] = File(default=[]),
+    db: Session = Depends(get_db),
+    prod_db: Session = Depends(get_prod_db),
+    current_user: CCUser = Depends(require_permission("patients.fax")),
+) -> SendFaxResponse:
+    return send_patient_fax(
+        db,
+        prod_db,
+        appointment_id=appointment_id,
+        destination_number=destination_number,
+        include_report=include_report,
+        uploaded_files=files,
+        actor=current_user,
+    )
