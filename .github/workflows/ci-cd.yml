@@ -239,7 +239,7 @@ jobs:
             --service-account=${{ env.RUNTIME_SERVICE_ACCOUNT }}
             --add-cloudsql-instances=${{ env.CLOUDSQL_INSTANCE }}
             --set-env-vars="^;^APP_ENV=staging;DEBUG=true;APP_NAME=scanx-command-center-api-staging;DATABASE_HOST=/cloudsql/${{ env.CLOUDSQL_INSTANCE }};DATABASE_NAME=${{ env.DATABASE_NAME }};DATABASE_USER=${{ env.DATABASE_USER }};CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000,https://scanx-command-center-fe-794794356928.us-central1.run.app"
-            --set-secrets=DATABASE_PASSWORD=scanx-staging-db-password:latest,JWT_SECRET_KEY=scanx-staging-jwt-secret:latest,PROD_DATABASE_URL=scanx-prod-database-url:latest
+            --set-secrets=DATABASE_PASSWORD=scanx-staging-db-password:latest,JWT_SECRET_KEY=scanx-staging-jwt-secret:latest,PROD_DATABASE_URL=scanx-prod-database-url:latest,WESTFAX_USERNAME=scanx-staging-westfax-username:latest,WESTFAX_PASSWORD=scanx-staging-westfax-password:latest,WESTFAX_PRODUCT_ID=scanx-staging-westfax-product-id:latest
 
       - name: Smoke test staging service
         run: |
