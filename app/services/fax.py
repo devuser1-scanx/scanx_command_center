@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.integrations.gcs_reports import (
-    download_blob_as_attachment,
-    locate_report_blob,
+    fetch_report_attachment_for_appointment,
+    locate_report_blob_for_appointment,
 )
 from app.integrations.westfax_client import (
     FaxAttachment,
@@ -18,19 +18,9 @@ from app.integrations.westfax_client import (
 )
 from app.models.auth import CCUser
 from app.repositories.fax import create_fax_transmission
-from app.repositories.patients import get_appointment_by_appointment_id
 from app.schemas.fax import FaxReportLookupResponse, FaxTransmissionItem, SendFaxResponse
 
 MAX_FAX_ATTACHMENTS = 2
-
-
-def _locate_patient_report_blob(prod_db: Session, appointment_id: str):
-    appointment = get_appointment_by_appointment_id(prod_db, appointment_id)
-
-    if appointment is None:
-        return None
-
-    return locate_report_blob(appointment)
 
 
 def lookup_patient_report(
@@ -38,9 +28,9 @@ def lookup_patient_report(
     appointment_id: str,
 ) -> FaxReportLookupResponse:
     """Metadata-only lookup (no download) so the popup can show what will
-    be attached before the user clicks Send.
+    be attached before the user clicks Send. Shared by the mail feature too.
     """
-    blob = _locate_patient_report_blob(prod_db, appointment_id)
+    blob = locate_report_blob_for_appointment(prod_db, appointment_id)
 
     if blob is None:
         return FaxReportLookupResponse(found=False, file_name=None)
@@ -49,18 +39,6 @@ def lookup_patient_report(
         found=True,
         file_name=blob.name.rsplit("/", 1)[-1] if blob.name else None,
     )
-
-
-def _fetch_report_attachment(
-    prod_db: Session,
-    appointment_id: str,
-) -> FaxAttachment | None:
-    blob = _locate_patient_report_blob(prod_db, appointment_id)
-
-    if blob is None:
-        return None
-
-    return download_blob_as_attachment(blob)
 
 
 def send_patient_fax(
@@ -84,7 +62,7 @@ def send_patient_fax(
     attachments: list[FaxAttachment] = []
 
     if include_report:
-        report_attachment = _fetch_report_attachment(prod_db, appointment_id)
+        report_attachment = fetch_report_attachment_for_appointment(prod_db, appointment_id)
 
         if report_attachment is not None:
             attachments.append(report_attachment)

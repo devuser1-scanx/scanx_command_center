@@ -50,6 +50,9 @@ class Settings(BaseSettings):
 
     gcs_reports_bucket: str = "scanx-reports"
 
+    gmail_sender_email: str | None = None
+    gmail_service_account_json: str | None = None
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]

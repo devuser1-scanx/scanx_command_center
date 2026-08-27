@@ -10,8 +10,10 @@ from app.db.prod_session import get_prod_db
 from app.db.session import get_db
 from app.models.auth import CCUser
 from app.schemas.fax import FaxReportLookupResponse, SendFaxResponse
+from app.schemas.mail import SendMailResponse
 from app.schemas.patients import PatientProfileResponse, PatientSearchResponse
 from app.services.fax import lookup_patient_report, send_patient_fax
+from app.services.mail import send_patient_mail
 from app.services.patients import get_patient_profile, search_patients
 
 router = APIRouter(prefix="/patients")
@@ -64,6 +66,35 @@ def send_fax_route(
         prod_db,
         appointment_id=appointment_id,
         destination_number=destination_number,
+        include_report=include_report,
+        uploaded_files=files,
+        actor=current_user,
+    )
+
+
+@router.post("/{appointment_id}/mail", response_model=SendMailResponse)
+def send_mail_route(
+    appointment_id: str,
+    to: str = Form(...),
+    cc: str | None = Form(default=None),
+    bcc: str | None = Form(default=None),
+    subject: str = Form(...),
+    body_html: str = Form(...),
+    include_report: bool = Form(True),
+    files: list[UploadFile] = File(default=[]),
+    db: Session = Depends(get_db),
+    prod_db: Session = Depends(get_prod_db),
+    current_user: CCUser = Depends(require_permission("patients.mail")),
+) -> SendMailResponse:
+    return send_patient_mail(
+        db,
+        prod_db,
+        appointment_id=appointment_id,
+        to_addresses=to,
+        cc_addresses=cc,
+        bcc_addresses=bcc,
+        subject=subject,
+        body_html=body_html,
         include_report=include_report,
         uploaded_files=files,
         actor=current_user,

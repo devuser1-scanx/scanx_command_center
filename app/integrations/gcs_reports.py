@@ -5,10 +5,12 @@ from datetime import date
 from functools import lru_cache
 
 from google.cloud import storage
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.integrations.westfax_client import FaxAttachment
 from app.models.production import Appointment
+from app.repositories.patients import get_appointment_by_appointment_id
 
 # Matches the human-readable tricefy report filename (e.g.
 # "Soro_Abrama_Report_2025-12-30.pdf"), as opposed to the DICOM-UID-named
@@ -126,3 +128,33 @@ def download_blob_as_attachment(blob: storage.Blob) -> FaxAttachment:
         content=blob.download_as_bytes(),
         content_type="application/pdf",
     )
+
+
+def locate_report_blob_for_appointment(
+    prod_db: Session,
+    appointment_id: str,
+) -> storage.Blob | None:
+    """Shared by the fax and mail send flows: look up the appointment, then
+    locate its report blob (if any) via locate_report_blob.
+    """
+    appointment = get_appointment_by_appointment_id(prod_db, appointment_id)
+
+    if appointment is None:
+        return None
+
+    return locate_report_blob(appointment)
+
+
+def fetch_report_attachment_for_appointment(
+    prod_db: Session,
+    appointment_id: str,
+) -> FaxAttachment | None:
+    """Shared by the fax and mail send flows: look up the appointment,
+    locate its report blob, and download it as an attachment.
+    """
+    blob = locate_report_blob_for_appointment(prod_db, appointment_id)
+
+    if blob is None:
+        return None
+
+    return download_blob_as_attachment(blob)
