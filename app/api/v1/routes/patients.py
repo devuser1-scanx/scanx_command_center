@@ -55,6 +55,7 @@ def lookup_patient_report_route(
 def send_fax_route(
     appointment_id: str,
     destination_number: str = Form(...),
+    subject: str | None = Form(default=None),
     include_report: bool = Form(True),
     files: list[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
@@ -66,6 +67,7 @@ def send_fax_route(
         prod_db,
         appointment_id=appointment_id,
         destination_number=destination_number,
+        subject=subject,
         include_report=include_report,
         uploaded_files=files,
         actor=current_user,

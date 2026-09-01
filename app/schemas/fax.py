@@ -9,13 +9,13 @@ class FaxTransmissionItem(BaseModel):
     id: int
     file_name: str
     status: str
-    westfax_job_id: str | None
+    email_message_id: str | None
     error_message: str | None
 
 
 class SendFaxResponse(BaseModel):
     destination_number: str
-    westfax_job_id: str | None
+    email_message_id: str | None
     transmissions: list[FaxTransmissionItem]
     created_at: datetime
 

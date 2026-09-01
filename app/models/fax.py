@@ -19,9 +19,10 @@ from app.db.base import Base
 class CCFaxTransmission(Base):
     """One row per file included in a fax send attempt.
 
-    Files attached to the same "Send" click share destination_number,
-    status and westfax_job_id, since WestFax combines every file in a
-    single SendFax call into one physical fax document sent as one job.
+    Faxes are sent via WestFax's email-to-fax gateway (an email to
+    {digits}@westfax.com). Files attached to the same "Send" click share
+    destination_number, status and email_message_id, since they go out as
+    one email with every file attached.
     """
 
     __tablename__ = "cc_fax_transmissions"
@@ -36,8 +37,8 @@ class CCFaxTransmission(Base):
             "sent_by_user_id",
         ),
         Index(
-            "ix_cc_fax_transmissions_westfax_job_id",
-            "westfax_job_id",
+            "ix_cc_fax_transmissions_email_message_id",
+            "email_message_id",
         ),
     )
 
@@ -67,7 +68,7 @@ class CCFaxTransmission(Base):
         nullable=False,
     )
 
-    westfax_job_id: Mapped[str | None] = mapped_column(
+    email_message_id: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,
     )

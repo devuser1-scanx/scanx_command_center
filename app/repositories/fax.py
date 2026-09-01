@@ -12,7 +12,7 @@ def create_fax_transmission(
     destination_number: str,
     file_name: str,
     status: str,
-    westfax_job_id: str | None,
+    email_message_id: str | None,
     error_message: str | None,
     sent_by_user_id: int,
 ) -> CCFaxTransmission:
@@ -21,7 +21,7 @@ def create_fax_transmission(
         destination_number=destination_number,
         file_name=file_name,
         status=status,
-        westfax_job_id=westfax_job_id,
+        email_message_id=email_message_id,
         error_message=error_message,
         sent_by_user_id=sent_by_user_id,
     )

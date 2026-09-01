@@ -42,11 +42,14 @@ class Settings(BaseSettings):
 
     cors_allowed_origins: str = "http://localhost:5173,http://localhost:3000,https://scanx-command-center-fe-794794356928.us-central1.run.app"
 
-    westfax_base_url: str = "https://api.westfax.com/Polka.Api/REST"
-    westfax_username: str | None = None
-    westfax_password: str | None = None
-    westfax_product_id: str | None = None
-    westfax_fax_header: str = "ScanX Command Center"
+    # Fax is sent via WestFax's email-to-fax gateway (an email to
+    # {digits}@westfax.com), not their REST API - so it reuses the Gmail
+    # sending config below. fax_email_subject is a fallback subject line,
+    # used only if the patient's appointment can't be looked up (normally
+    # the subject is built from name + exam type). fax_feedback_email is
+    # CC'd on every fax email as a single, easily-changed receipt address.
+    fax_email_subject: str = "ScanX Command Center"
+    fax_feedback_email: str = "scheduling@scanx.care"
 
     gcs_reports_bucket: str = "scanx-reports"
 
