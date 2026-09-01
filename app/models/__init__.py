@@ -12,6 +12,7 @@ from app.models.auth import (
 )
 from app.models.fax import CCFaxTransmission
 from app.models.mail import CCMailTransmission
+from app.models.sms import CCSmsTransmission
 
 __all__ = [
     "CCUser",
@@ -26,4 +27,5 @@ __all__ = [
     "CCUserActivityAudit",
     "CCFaxTransmission",
     "CCMailTransmission",
+    "CCSmsTransmission",
 ]

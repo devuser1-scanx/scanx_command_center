@@ -56,6 +56,17 @@ class Settings(BaseSettings):
     gmail_sender_email: str | None = None
     gmail_service_account_json: str | None = None
 
+    # Text messages (SMS/MMS/RCS) are sent via Twilio's Messages API.
+    # twilio_messaging_service_sid is preferred over twilio_from_number: a
+    # Messaging Service can have an RCS sender attached in the Twilio
+    # Console, in which case Twilio automatically sends via RCS when the
+    # recipient's device supports it and falls back to plain SMS otherwise -
+    # no extra code needed on our side for that behavior.
+    twilio_account_sid: str | None = None
+    twilio_auth_token: str | None = None
+    twilio_messaging_service_sid: str | None = None
+    twilio_from_number: str | None = None
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]

@@ -10,6 +10,7 @@ from app.models.production import (
     Appointment,
     CallLog,
     Checkin,
+    Clinic,
     FormStatus,
     FormTracking,
     Message,
@@ -88,6 +89,11 @@ def get_appointment_by_appointment_id(
 ) -> Appointment | None:
     statement = select(Appointment).where(Appointment.appointment_id == appointment_id)
 
+    return prod_db.scalar(statement)
+
+
+def get_clinic(prod_db: Session, clinic_id: int) -> Clinic | None:
+    statement = select(Clinic).where(Clinic.id == clinic_id)
     return prod_db.scalar(statement)
 
 

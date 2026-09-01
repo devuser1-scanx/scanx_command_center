@@ -12,9 +12,11 @@ from app.models.auth import CCUser
 from app.schemas.fax import FaxReportLookupResponse, SendFaxResponse
 from app.schemas.mail import SendMailResponse
 from app.schemas.patients import PatientProfileResponse, PatientSearchResponse
+from app.schemas.sms import SendSmsResponse, SmsPrefillResponse
 from app.services.fax import lookup_patient_report, send_patient_fax
 from app.services.mail import send_patient_mail
 from app.services.patients import get_patient_profile, search_patients
+from app.services.sms import get_sms_prefill, send_patient_sms
 
 router = APIRouter(prefix="/patients")
 
@@ -99,5 +101,33 @@ def send_mail_route(
         body_html=body_html,
         include_report=include_report,
         uploaded_files=files,
+        actor=current_user,
+    )
+
+
+@router.get("/{appointment_id}/sms/prefill", response_model=SmsPrefillResponse)
+def get_sms_prefill_route(
+    appointment_id: str,
+    prod_db: Session = Depends(get_prod_db),
+    current_user: CCUser = Depends(require_permission("patients.sms")),
+) -> SmsPrefillResponse:
+    return get_sms_prefill(prod_db, appointment_id)
+
+
+@router.post("/{appointment_id}/sms", response_model=SendSmsResponse)
+def send_sms_route(
+    appointment_id: str,
+    purpose: str = Form(...),
+    destination_number: str = Form(...),
+    body: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: CCUser = Depends(require_permission("patients.sms")),
+) -> SendSmsResponse:
+    return send_patient_sms(
+        db,
+        appointment_id=appointment_id,
+        purpose=purpose,
+        destination_number=destination_number,
+        body=body,
         actor=current_user,
     )
