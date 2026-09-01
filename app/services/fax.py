@@ -32,9 +32,9 @@ def _normalize_fax_number(raw: str) -> str:
 
 
 def _build_fax_subject(appointment: Appointment | None) -> str:
-    """firstname_lastname_Fibroscan-Report for FibroScan / Liver
-    Elastography appointments, firstname_lastname_<appointment type>-Report
-    for everything else. Falls back to fax_email_subject if the
+    """"Firstname Lastname Fibroscan Report" for FibroScan / Liver
+    Elastography appointments, "Firstname Lastname <appointment type>
+    Report" for everything else. Falls back to fax_email_subject if the
     appointment - or its name/type - isn't available.
     """
     if appointment is None:
@@ -42,7 +42,7 @@ def _build_fax_subject(appointment: Appointment | None) -> str:
 
     first_name = (appointment.first_name or "").strip()
     last_name = (appointment.last_name or "").strip()
-    name_part = "_".join(part for part in (first_name, last_name) if part)
+    name_part = " ".join(part for part in (first_name, last_name) if part)
 
     appointment_type = (appointment.appointment_type or "").strip()
 
@@ -51,7 +51,7 @@ def _build_fax_subject(appointment: Appointment | None) -> str:
 
     report_type = "Fibroscan" if "fibro" in appointment_type.lower() else appointment_type
 
-    return f"{name_part}_{report_type}-Report"
+    return f"{name_part} {report_type} Report"
 
 
 def lookup_patient_report(
