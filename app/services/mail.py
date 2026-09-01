@@ -5,7 +5,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.integrations.gcs_reports import fetch_report_attachment_for_appointment
-from app.integrations.gmail_client import GmailApiError, send_email
+from app.integrations.gmail_client import (
+    GmailApiError,
+    get_scanx_logo_inline_image,
+    send_email,
+)
 from app.integrations.westfax_client import FaxAttachment
 from app.models.auth import CCUser
 from app.repositories.mail import create_mail_transmission
@@ -73,6 +77,8 @@ def send_patient_mail(
             detail=f"An email can include at most {MAX_MAIL_ATTACHMENTS} files.",
         )
 
+    logo = get_scanx_logo_inline_image()
+
     try:
         gmail_message_id = send_email(
             to=to_list,
@@ -81,6 +87,7 @@ def send_patient_mail(
             subject=subject,
             html_body=body_html,
             attachments=attachments,
+            inline_images=[logo] if logo else [],
         )
         transmission_status = "submitted"
         error_message = None

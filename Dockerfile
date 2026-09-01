@@ -28,6 +28,7 @@ RUN python -m pip install --no-cache-dir --upgrade \
 COPY alembic.ini .
 COPY migrations ./migrations
 COPY app ./app
+COPY assets ./assets
 
 USER scanx
 
