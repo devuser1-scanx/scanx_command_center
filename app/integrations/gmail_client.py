@@ -2,13 +2,10 @@ from __future__ import annotations
 
 import base64
 import json
-from dataclasses import dataclass
 from email.mime.application import MIMEApplication
-from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from functools import lru_cache
-from pathlib import Path
+from email.utils import formataddr
 
 import httpx
 from google.auth.transport.requests import Request
@@ -23,45 +20,7 @@ from app.integrations.westfax_client import FaxAttachment
 GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
 GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
 
-
-@dataclass(frozen=True)
-class InlineImage:
-    """An image embedded in the HTML body via <img src="cid:{content_id}">,
-    as opposed to a regular file attachment.
-    """
-
-    content_id: str
-    content: bytes
-    content_type: str
-
-
-# The frontend's mail body template references this exact content_id via
-# <img src="cid:scanx-logo">, so this string must match
-# send-mail-dialog.tsx's SCANX_LOGO_CONTENT_ID.
-SCANX_LOGO_CONTENT_ID = "scanx-logo"
-
-# app/integrations/gmail_client.py -> parents[2] is the project root, where
-# assets/ lives (a sibling of app/, migrations/, requirements.txt, etc).
-_SCANX_LOGO_PATH = (
-    Path(__file__).resolve().parents[2] / "assets" / "ScanX animated logo.gif"
-)
-
-
-@lru_cache
-def get_scanx_logo_inline_image() -> InlineImage | None:
-    """Loads the ScanX animated logo for embedding in email signatures.
-
-    Returns None (rather than raising) if the asset is missing, so a
-    missing logo degrades to "no logo" instead of breaking mail sending.
-    """
-    if not _SCANX_LOGO_PATH.exists():
-        return None
-
-    return InlineImage(
-        content_id=SCANX_LOGO_CONTENT_ID,
-        content=_SCANX_LOGO_PATH.read_bytes(),
-        content_type="image/gif",
-    )
+GMAIL_SENDER_DISPLAY_NAME = "ScanX Health LLC"
 
 
 class GmailApiError(Exception):
@@ -106,7 +65,6 @@ def send_email(
     subject: str,
     html_body: str,
     attachments: list[FaxAttachment],
-    inline_images: list[InlineImage] | None = None,
 ) -> str:
     """Sends one email via the Gmail API, from GMAIL_SENDER_EMAIL.
 
@@ -116,7 +74,7 @@ def send_email(
         raise ValueError("At least one recipient is required.")
 
     message = MIMEMultipart("mixed")
-    message["From"] = settings.gmail_sender_email
+    message["From"] = formataddr((GMAIL_SENDER_DISPLAY_NAME, settings.gmail_sender_email))
     message["To"] = ", ".join(to)
 
     if cc:
@@ -127,20 +85,7 @@ def send_email(
 
     message["Subject"] = subject
 
-    # The body + any inline (cid-referenced) images live in a
-    # multipart/related part, nested inside the outer multipart/mixed
-    # alongside regular file attachments - the standard MIME structure for
-    # HTML email with embedded images, for maximum client compatibility.
-    body_related = MIMEMultipart("related")
-    body_related.attach(MIMEText(html_body, "html"))
-
-    for image in inline_images or []:
-        image_part = MIMEImage(image.content, _subtype=image.content_type.rsplit("/", 1)[-1])
-        image_part.add_header("Content-ID", f"<{image.content_id}>")
-        image_part.add_header("Content-Disposition", "inline", filename=image.content_id)
-        body_related.attach(image_part)
-
-    message.attach(body_related)
+    message.attach(MIMEText(html_body, "html"))
 
     for attachment in attachments:
         part = MIMEApplication(attachment.content)
