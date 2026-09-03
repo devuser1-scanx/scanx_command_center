@@ -54,7 +54,11 @@ def list_reports(*, search: str | None, page: int, page_size: int) -> ReportGrou
 
     if search:
         needle = search.strip().lower()
-        groups = [group for group in groups if needle in _display_name(group.source, group.group_key).lower()]
+        groups = [
+            group
+            for group in groups
+            if needle in _display_name(group.source, group.group_key).lower()
+        ]
 
     groups = sorted(groups, key=lambda group: group.updated_at or datetime.min, reverse=True)
 
