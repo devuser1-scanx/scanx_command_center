@@ -33,9 +33,9 @@ class Settings(BaseSettings):
     prod_database_url: str | None = None
     dashboard_poll_interval_seconds: int = 5
 
-    jwt_secret_key: Annotated[str, Field(min_length=32)] = (
-        "change-me-for-local-development-only-123456"
-    )
+    # No default: an unset JWT_SECRET_KEY must fail startup, not silently
+    # sign tokens with a well-known fallback.
+    jwt_secret_key: Annotated[str, Field(min_length=32)]
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 7

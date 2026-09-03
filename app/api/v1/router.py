@@ -6,6 +6,7 @@ from app.api.v1.routes import (
     dashboard,
     health,
     patients,
+    reports,
     users,
     ws_dashboard,
 )
@@ -45,4 +46,9 @@ api_router.include_router(
 api_router.include_router(
     patients.router,
     tags=["patients"],
+)
+
+api_router.include_router(
+    reports.router,
+    tags=["reports"],
 )

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import re
-from datetime import date
+import time
+from dataclasses import dataclass
+from datetime import date, datetime
 from functools import lru_cache
 
 from google.cloud import storage
@@ -20,6 +22,11 @@ _TRICEFY_HUMAN_READABLE_FILE = re.compile(r".+_\d{4}-\d{2}-\d{2}\.pdf$", re.IGNO
 
 _FIBROSCAN_PREFIX = "fibroscan/"
 _TRICEFY_PREFIX = "tricefy/"
+
+# Public aliases for callers outside this module (e.g. the reports browsing
+# service), which need the prefixes without reaching into "private" names.
+FIBROSCAN_PREFIX = _FIBROSCAN_PREFIX
+TRICEFY_PREFIX = _TRICEFY_PREFIX
 
 
 def _blob_filename(blob: storage.Blob) -> str:
@@ -158,3 +165,135 @@ def fetch_report_attachment_for_appointment(
         return None
 
     return download_blob_as_attachment(blob)
+
+
+# --- Report browsing (Reports tab) -----------------------------------------
+#
+# Unlike the exact-match lookups above, this section lists everything in
+# both report prefixes for the browsable Reports tab. Tricefy stores one
+# subfolder per exam (holding a DICOM-UID-named PDF plus a human-readable
+# one); fibroscan stores PDFs flat with no subfolders. To give the UI one
+# consistent "folder" concept, each fibroscan PDF is treated as its own
+# single-file group.
+
+
+@dataclass(frozen=True)
+class ReportGroup:
+    source: str  # "tricefy" | "fibroscan"
+    group_key: str  # unique within its source: tricefy folder name, or fibroscan file name
+    file_count: int
+    updated_at: datetime | None
+
+
+@dataclass(frozen=True)
+class ReportFile:
+    blob_name: str
+    file_name: str
+    size_bytes: int
+    updated_at: datetime | None
+
+
+_REPORT_GROUPS_CACHE_TTL_SECONDS = 300
+_report_groups_cache: tuple[float, list[ReportGroup]] | None = None
+
+
+def _list_tricefy_groups(bucket: storage.Bucket) -> list[ReportGroup]:
+    groups: dict[str, list[storage.Blob]] = {}
+
+    for blob in bucket.list_blobs(prefix=_TRICEFY_PREFIX):
+        relative = (blob.name or "")[len(_TRICEFY_PREFIX) :]
+        folder_name, _, file_name = relative.partition("/")
+
+        if not folder_name or not file_name:
+            continue  # stray object directly under tricefy/, not a report
+
+        groups.setdefault(folder_name, []).append(blob)
+
+    return [
+        ReportGroup(
+            source="tricefy",
+            group_key=folder_name,
+            file_count=len(blobs),
+            updated_at=max((blob.updated for blob in blobs if blob.updated), default=None),
+        )
+        for folder_name, blobs in groups.items()
+    ]
+
+
+def _list_fibroscan_groups(bucket: storage.Bucket) -> list[ReportGroup]:
+    groups = []
+
+    for blob in bucket.list_blobs(prefix=_FIBROSCAN_PREFIX):
+        file_name = _blob_filename(blob)
+
+        if not file_name.lower().endswith(".pdf"):
+            continue  # skip non-report device files (e.g. .fibx2)
+
+        groups.append(
+            ReportGroup(
+                source="fibroscan",
+                group_key=file_name,
+                file_count=1,
+                updated_at=blob.updated,
+            )
+        )
+
+    return groups
+
+
+def list_report_groups() -> list[ReportGroup]:
+    """All report groups (tricefy exam folders + individual fibroscan PDFs)
+    across both prefixes, combined. Cached briefly since building this list
+    walks both prefixes in full on every miss.
+    """
+    global _report_groups_cache
+
+    if _report_groups_cache is not None:
+        cached_at, cached_groups = _report_groups_cache
+
+        if time.monotonic() - cached_at < _REPORT_GROUPS_CACHE_TTL_SECONDS:
+            return cached_groups
+
+    bucket = _get_bucket()
+    groups = _list_tricefy_groups(bucket) + _list_fibroscan_groups(bucket)
+    _report_groups_cache = (time.monotonic(), groups)
+
+    return groups
+
+
+def list_group_files(source: str, group_key: str) -> list[ReportFile]:
+    """All PDF files inside one report group."""
+    bucket = _get_bucket()
+
+    if source == "tricefy":
+        blobs = [
+            blob
+            for blob in bucket.list_blobs(prefix=f"{_TRICEFY_PREFIX}{group_key}/")
+            if _blob_filename(blob).lower().endswith(".pdf")
+        ]
+    elif source == "fibroscan":
+        blob = bucket.get_blob(f"{_FIBROSCAN_PREFIX}{group_key}")
+        blobs = [blob] if blob is not None else []
+    else:
+        blobs = []
+
+    return [
+        ReportFile(
+            blob_name=blob.name or "",
+            file_name=_blob_filename(blob),
+            size_bytes=blob.size or 0,
+            updated_at=blob.updated,
+        )
+        for blob in blobs
+    ]
+
+
+def get_report_file_blob(blob_name: str) -> storage.Blob | None:
+    """Fetches a single report blob by its full bucket path, restricted to
+    the tricefy/fibroscan report prefixes so this can't be used to read
+    unrelated bucket contents (e.g. assets/, clinicpricing/, raw/).
+    """
+    if not (blob_name.startswith(_TRICEFY_PREFIX) or blob_name.startswith(_FIBROSCAN_PREFIX)):
+        return None
+
+    return _get_bucket().get_blob(blob_name)

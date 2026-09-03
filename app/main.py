@@ -8,11 +8,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.router import api_router
 from app.api.v1.routes.ws_dashboard import poll_dashboard_timeline_loop
 from app.core.config import settings
+from app.integrations.gcs_reports import list_report_groups
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     poll_task = asyncio.create_task(poll_dashboard_timeline_loop())
+
+    # Pre-warms the report groups cache so the first Reports tab load
+    # doesn't pay the full bucket-listing cost (~15-20s across ~2k blobs).
+    asyncio.create_task(asyncio.to_thread(list_report_groups))
 
     try:
         yield
