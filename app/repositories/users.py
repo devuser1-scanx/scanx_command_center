@@ -89,6 +89,12 @@ def list_users(
     return users, total
 
 
+def list_active_roles(db: Session) -> list[CCRole]:
+    statement = select(CCRole).where(CCRole.is_active.is_(True)).order_by(CCRole.name)
+
+    return list(db.scalars(statement).all())
+
+
 def get_roles_by_codes(
     db: Session,
     role_codes: list[str],

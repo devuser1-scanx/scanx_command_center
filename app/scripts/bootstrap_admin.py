@@ -102,7 +102,6 @@ def bootstrap_admin(
 
             existing_user.password_hash = hash_password(password)
             existing_user.is_active = True
-            existing_user.is_email_verified = True
             existing_user.must_change_password = True
             existing_user.failed_login_attempts = 0
             existing_user.locked_until = None
@@ -127,7 +126,6 @@ def bootstrap_admin(
             phone=phone.strip() if phone else None,
             password_hash=hash_password(password),
             is_active=True,
-            is_email_verified=True,
             must_change_password=True,
             failed_login_attempts=0,
         )

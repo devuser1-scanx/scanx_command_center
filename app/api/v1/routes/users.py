@@ -20,7 +20,6 @@ from app.db.session import get_db
 from app.models.auth import CCUser
 from app.schemas.auth import MessageResponse
 from app.schemas.users import (
-    AdminPasswordResetRequest,
     UserClinicAssignmentRequest,
     UserCreateRequest,
     UserListResponse,
@@ -226,7 +225,6 @@ def update_command_center_user_clinics(
 )
 def reset_user_password_as_admin(
     user_id: int,
-    payload: AdminPasswordResetRequest,
     request: Request,
     db: Session = Depends(get_db),
     current_user: CCUser = Depends(require_permission("users.update")),
@@ -234,12 +232,11 @@ def reset_user_password_as_admin(
     admin_reset_password(
         db,
         user_id=user_id,
-        temporary_password=payload.temporary_password,
         actor_user=current_user,
         ip_address=get_client_ip(request),
         user_agent=get_user_agent(request),
     )
 
     return MessageResponse(
-        message=("Temporary password assigned successfully. The user must change it after login.")
+        message=("A new temporary password has been emailed to the user.")
     )

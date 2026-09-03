@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.security import (
+    generate_temporary_password,
     hash_password,
     utc_now,
-    validate_password_strength,
 )
+from app.integrations.gmail_client import GmailApiError, send_email
 from app.models.auth import CCUser
 from app.repositories.auth import revoke_all_user_sessions
 from app.repositories.users import (
@@ -30,6 +33,51 @@ from app.schemas.users import (
 )
 from app.services.auth import record_user_activity
 
+logger = logging.getLogger(__name__)
+
+
+def _send_temporary_password_email(
+    *,
+    to_email: str,
+    first_name: str,
+    temporary_password: str,
+    is_new_account: bool,
+) -> None:
+    subject = (
+        "Your ScanX Command Center account"
+        if is_new_account
+        else "Your ScanX Command Center password has been reset"
+    )
+
+    intro = (
+        "An account has been created for you on ScanX Command Center."
+        if is_new_account
+        else "An administrator has reset your ScanX Command Center password."
+    )
+
+    html_body = f"""
+<p>Hi {first_name},</p>
+<p>{intro}</p>
+<p>Temporary password: <strong>{temporary_password}</strong></p>
+<p>You'll be asked to choose a new password the first time you log in.</p>
+""".strip()
+
+    try:
+        send_email(
+            to=[to_email],
+            cc=[],
+            bcc=[],
+            subject=subject,
+            html_body=html_body,
+            attachments=[],
+        )
+    except (GmailApiError, RuntimeError):
+        # Mirrors request_password_reset()'s handling in services/auth.py:
+        # the account/reset action itself already succeeded and must not
+        # be rolled back over a delivery failure - just make it
+        # observable operationally.
+        logger.exception("Failed to send temporary password email to %s", to_email)
+
 
 def build_user_response(
     user: CCUser,
@@ -41,7 +89,6 @@ def build_user_response(
         last_name=user.last_name,
         phone=user.phone,
         is_active=user.is_active,
-        is_email_verified=user.is_email_verified,
         must_change_password=user.must_change_password,
         failed_login_attempts=user.failed_login_attempts,
         locked_until=user.locked_until,
@@ -92,13 +139,7 @@ def create_user(
             detail="A user with this email already exists.",
         )
 
-    try:
-        validate_password_strength(payload.temporary_password)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(exc),
-        ) from exc
+    temporary_password = generate_temporary_password()
 
     roles = get_roles_by_codes(
         db,
@@ -133,9 +174,8 @@ def create_user(
         first_name=payload.first_name.strip(),
         last_name=payload.last_name.strip(),
         phone=(payload.phone.strip() if payload.phone else None),
-        password_hash=hash_password(payload.temporary_password),
+        password_hash=hash_password(temporary_password),
         is_active=True,
-        is_email_verified=True,
         must_change_password=True,
         created_by_user_id=actor_user.id,
         updated_by_user_id=actor_user.id,
@@ -192,6 +232,13 @@ def create_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Created user could not be loaded.",
         )
+
+    _send_temporary_password_email(
+        to_email=created_user.email,
+        first_name=created_user.first_name,
+        temporary_password=temporary_password,
+        is_new_account=True,
+    )
 
     return build_user_response(created_user)
 
@@ -465,20 +512,12 @@ def admin_reset_password(
     db: Session,
     *,
     user_id: int,
-    temporary_password: str,
     actor_user: CCUser,
     ip_address: str | None,
     user_agent: str | None,
 ) -> None:
     user = get_user_or_404(db, user_id)
-
-    try:
-        validate_password_strength(temporary_password)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(exc),
-        ) from exc
+    temporary_password = generate_temporary_password()
 
     now = utc_now()
 
@@ -507,3 +546,10 @@ def admin_reset_password(
     )
 
     db.commit()
+
+    _send_temporary_password_email(
+        to_email=user.email,
+        first_name=user.first_name,
+        temporary_password=temporary_password,
+        is_new_account=False,
+    )

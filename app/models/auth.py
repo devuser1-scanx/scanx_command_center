@@ -73,13 +73,6 @@ class CCUser(Base):
         server_default="true",
     )
 
-    is_email_verified: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-        server_default="false",
-    )
-
     must_change_password: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,

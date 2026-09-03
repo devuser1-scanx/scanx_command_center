@@ -1,11 +1,20 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, status
+import ipaddress
+
+from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.api.dependencies.auth import get_current_user
-from app.core.config import settings
+from app.core.cookies import (
+    REFRESH_TOKEN_COOKIE_NAME,
+    clear_auth_cookies,
+    get_refresh_token_from_cookie,
+    require_csrf_token,
+    set_auth_cookies,
+)
+from app.core.security import generate_secure_token
 from app.db.session import get_db
 from app.models.auth import CCUser
 from app.schemas.auth import (
@@ -14,14 +23,13 @@ from app.schemas.auth import (
     ForgotPasswordRequest,
     ForgotPasswordResponse,
     LoginRequest,
-    LogoutRequest,
     MessageResponse,
     OAuthTokenResponse,
-    RefreshTokenRequest,
     ResetPasswordRequest,
     TokenResponse,
 )
 from app.services.auth import (
+    IssuedTokens,
     build_current_user_response,
     change_password,
     login,
@@ -36,20 +44,63 @@ router = APIRouter(
 )
 
 
+def _parse_ip(value: str | None) -> str | None:
+    """Returns value if it's a syntactically valid IP address, else None.
+
+    Guards CCLoginAudit.ip_address (a Postgres INET column) against a
+    malformed X-Forwarded-For header or a non-IP test-client peer address
+    crashing the request with a DB type error.
+    """
+    if not value:
+        return None
+
+    try:
+        ipaddress.ip_address(value)
+    except ValueError:
+        return None
+
+    return value
+
+
 def get_client_ip(request: Request) -> str | None:
+    # NOTE: X-Forwarded-For is client-supplied and not verified against a
+    # trusted-proxy allowlist here, so it can still be spoofed by a direct
+    # caller - only its *format* is validated. Restricting this to a known
+    # reverse-proxy hop needs the deployment's actual trusted-proxy IP(s),
+    # which aren't available in this codebase.
     forwarded_for = request.headers.get("x-forwarded-for")
 
     if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
+        candidate = _parse_ip(forwarded_for.split(",")[0].strip())
+
+        if candidate:
+            return candidate
 
     if request.client:
-        return request.client.host
+        return _parse_ip(request.client.host)
 
     return None
 
 
 def get_user_agent(request: Request) -> str | None:
     return request.headers.get("user-agent")
+
+
+def _respond_with_tokens(response: Response, issued: IssuedTokens) -> TokenResponse:
+    """Sets the refresh/CSRF cookies on `response` and returns the public,
+    cookie-free response body.
+    """
+    set_auth_cookies(
+        response,
+        refresh_token=issued.refresh_token,
+        csrf_token=generate_secure_token(),
+    )
+
+    return TokenResponse(
+        access_token=issued.access_token,
+        expires_in=issued.expires_in,
+        user=issued.user,
+    )
 
 
 @router.post(
@@ -85,9 +136,10 @@ def swagger_token_login(
 def login_user(
     payload: LoginRequest,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
 ) -> TokenResponse:
-    return login(
+    issued = login(
         db,
         email=str(payload.email),
         password=payload.password,
@@ -95,38 +147,52 @@ def login_user(
         user_agent=get_user_agent(request),
     )
 
+    return _respond_with_tokens(response, issued)
+
 
 @router.post(
     "/refresh",
     response_model=TokenResponse,
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_csrf_token)],
 )
 def refresh_access_token(
-    payload: RefreshTokenRequest,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
 ) -> TokenResponse:
-    return refresh_tokens(
+    refresh_token = get_refresh_token_from_cookie(request)
+
+    issued = refresh_tokens(
         db,
-        refresh_token=payload.refresh_token,
+        refresh_token=refresh_token,
         ip_address=get_client_ip(request),
         user_agent=get_user_agent(request),
     )
+
+    return _respond_with_tokens(response, issued)
 
 
 @router.post(
     "/logout",
     response_model=MessageResponse,
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_csrf_token)],
 )
 def logout_user(
-    payload: LogoutRequest,
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db),
 ) -> MessageResponse:
-    logout(
-        db,
-        refresh_token=payload.refresh_token,
-    )
+    refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)
+
+    if refresh_token:
+        logout(
+            db,
+            refresh_token=refresh_token,
+        )
+
+    clear_auth_cookies(response)
 
     return MessageResponse(
         message="Logged out successfully.",
@@ -178,27 +244,17 @@ def forgot_password(
     payload: ForgotPasswordRequest,
     db: Session = Depends(get_db),
 ) -> ForgotPasswordResponse:
-    reset_token = request_password_reset(
+    request_password_reset(
         db,
         email=str(payload.email),
     )
 
-    response = ForgotPasswordResponse(
+    return ForgotPasswordResponse(
         message=(
             "If an active account exists for this email, "
-            "password reset instructions have been generated."
+            "password reset instructions have been sent."
         )
     )
-
-    if settings.app_env.lower() in {
-        "local",
-        "dev",
-        "development",
-        "test",
-    }:
-        response.reset_token = reset_token
-
-    return response
 
 
 @router.post(

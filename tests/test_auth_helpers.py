@@ -48,7 +48,6 @@ def make_user() -> CCUser:
         phone="555-0100",
         password_hash="hash",
         is_active=True,
-        is_email_verified=True,
         must_change_password=False,
         failed_login_attempts=0,
         last_login_at=datetime(
@@ -227,10 +226,7 @@ def test_get_current_user_returns_active_access_token_user(
 
 
 def test_get_current_user_rejects_refresh_token() -> None:
-    token = create_refresh_token(
-        subject="1",
-        session_id=1,
-    )
+    token = create_refresh_token(subject="1")
 
     with pytest.raises(HTTPException) as exc_info:
         get_current_user(

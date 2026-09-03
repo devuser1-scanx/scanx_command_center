@@ -7,10 +7,13 @@ import pytest
 
 from app.core.config import settings
 from app.core.security import (
+    JWT_AUDIENCE,
+    JWT_ISSUER,
     create_access_token,
     create_refresh_token,
     decode_token,
     ensure_utc,
+    generate_temporary_password,
     hash_password,
     hash_token,
     validate_password_strength,
@@ -73,17 +76,13 @@ def test_access_token_round_trip_includes_claims() -> None:
     assert payload["jti"]
 
 
-def test_refresh_token_round_trip_includes_session_id() -> None:
-    token = create_refresh_token(
-        subject="42",
-        session_id=7,
-    )
+def test_refresh_token_round_trip() -> None:
+    token = create_refresh_token(subject="42")
 
     payload = decode_token(token)
 
     assert payload["sub"] == "42"
     assert payload["type"] == "refresh"
-    assert payload["session_id"] == 7
 
 
 def test_expired_token_is_rejected() -> None:
@@ -128,6 +127,8 @@ def test_token_missing_subject_is_rejected() -> None:
             "type": "access",
             "iat": now,
             "exp": now + timedelta(minutes=5),
+            "iss": JWT_ISSUER,
+            "aud": JWT_AUDIENCE,
         },
         settings.jwt_secret_key,
         algorithm=settings.jwt_algorithm,
@@ -148,6 +149,8 @@ def test_token_missing_type_is_rejected() -> None:
             "sub": "42",
             "iat": now,
             "exp": now + timedelta(minutes=5),
+            "iss": JWT_ISSUER,
+            "aud": JWT_AUDIENCE,
         },
         settings.jwt_secret_key,
         algorithm=settings.jwt_algorithm,
@@ -158,6 +161,47 @@ def test_token_missing_type_is_rejected() -> None:
         match="Token type is missing",
     ):
         decode_token(token)
+
+
+def test_token_missing_issuer_or_audience_is_rejected() -> None:
+    now = datetime.now(UTC)
+
+    missing_iss = jwt.encode(
+        {
+            "sub": "42",
+            "type": "access",
+            "iat": now,
+            "exp": now + timedelta(minutes=5),
+            "aud": JWT_AUDIENCE,
+        },
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm,
+    )
+
+    with pytest.raises(ValueError, match="Invalid or expired token"):
+        decode_token(missing_iss)
+
+    missing_aud = jwt.encode(
+        {
+            "sub": "42",
+            "type": "access",
+            "iat": now,
+            "exp": now + timedelta(minutes=5),
+            "iss": JWT_ISSUER,
+        },
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm,
+    )
+
+    with pytest.raises(ValueError, match="Invalid or expired token"):
+        decode_token(missing_aud)
+
+
+def test_generate_temporary_password_always_satisfies_strength_policy() -> None:
+    for _ in range(50):
+        password = generate_temporary_password()
+        # Raises on failure - this is the actual assertion.
+        validate_password_strength(password)
 
 
 def test_hash_token_is_stable_sha256_hex_digest() -> None:

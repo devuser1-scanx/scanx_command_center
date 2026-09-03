@@ -37,10 +37,20 @@ class Settings(BaseSettings):
     # sign tokens with a well-known fallback.
     jwt_secret_key: Annotated[str, Field(min_length=32)]
     jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 30
+
+    # There's no access-token blacklist/revocation store, so an issued
+    # access token stays usable for its full lifetime even after
+    # logout/password-change/admin-reset (those only revoke refresh-token
+    # sessions). Kept short to bound that exposure window without needing
+    # a shared revocation store.
+    jwt_access_token_expire_minutes: int = 15
     jwt_refresh_token_expire_days: int = 7
 
     cors_allowed_origins: str = "http://localhost:5173,http://localhost:3000,https://scanx-command-center-fe-794794356928.us-central1.run.app"
+
+    # Base URL of the Command Center frontend, used to build the link sent
+    # in password-reset emails (e.g. "{frontend_base_url}/reset-password?token=...").
+    frontend_base_url: str = "http://localhost:3000"
 
     # Fax is sent via WestFax's email-to-fax gateway (an email to
     # {digits}@westfax.com), not their REST API - so it reuses the Gmail
@@ -85,14 +95,18 @@ class Settings(BaseSettings):
 
         return value
 
-    @field_validator(
-        "jwt_access_token_expire_minutes",
-        "jwt_refresh_token_expire_days",
-    )
+    @field_validator("jwt_access_token_expire_minutes")
     @classmethod
-    def validate_positive_expiry(cls, value: int) -> int:
-        if value <= 0:
-            raise ValueError("JWT expiry values must be greater than zero")
+    def validate_access_token_expiry(cls, value: int) -> int:
+        if not 0 < value <= 120:
+            raise ValueError("jwt_access_token_expire_minutes must be between 1 and 120")
+        return value
+
+    @field_validator("jwt_refresh_token_expire_days")
+    @classmethod
+    def validate_refresh_token_expiry(cls, value: int) -> int:
+        if not 0 < value <= 30:
+            raise ValueError("jwt_refresh_token_expire_days must be between 1 and 30")
         return value
 
     @property

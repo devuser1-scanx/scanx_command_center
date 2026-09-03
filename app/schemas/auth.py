@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+from app.core.security import validate_password_strength
 
 
 class LoginRequest(BaseModel):
@@ -10,18 +12,21 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
 
-class RefreshTokenRequest(BaseModel):
-    refresh_token: str = Field(min_length=1)
-
-
-class LogoutRequest(BaseModel):
-    refresh_token: str = Field(min_length=1)
-
-
 class ChangePasswordRequest(BaseModel):
     current_password: str = Field(min_length=1, max_length=200)
     new_password: str = Field(min_length=12, max_length=200)
     confirm_new_password: str = Field(min_length=12, max_length=200)
+
+    # Defense-in-depth: the service layer already calls
+    # validate_password_strength() before hashing, so this schema-level
+    # check can never actually let a weak password through today - it
+    # exists so that stays true even if a future code path calls
+    # hash_password() some other way that skips the service function.
+    @field_validator("new_password")
+    @classmethod
+    def _check_new_password_strength(cls, value: str) -> str:
+        validate_password_strength(value)
+        return value
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -32,6 +37,12 @@ class ResetPasswordRequest(BaseModel):
     token: str = Field(min_length=32, max_length=500)
     new_password: str = Field(min_length=12, max_length=200)
     confirm_new_password: str = Field(min_length=12, max_length=200)
+
+    @field_validator("new_password")
+    @classmethod
+    def _check_new_password_strength(cls, value: str) -> str:
+        validate_password_strength(value)
+        return value
 
 
 class RoleResponse(BaseModel):
@@ -65,7 +76,6 @@ class CurrentUserResponse(BaseModel):
     last_name: str
     phone: str | None
     is_active: bool
-    is_email_verified: bool
     must_change_password: bool
     last_login_at: datetime | None
 
@@ -76,7 +86,6 @@ class CurrentUserResponse(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
-    refresh_token: str
     token_type: str = "bearer"
     expires_in: int
     user: CurrentUserResponse
@@ -93,6 +102,3 @@ class MessageResponse(BaseModel):
 
 class ForgotPasswordResponse(BaseModel):
     message: str
-
-    # Returned only during local development.
-    reset_token: str | None = None

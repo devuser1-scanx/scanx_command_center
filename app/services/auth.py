@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+from dataclasses import dataclass
 from datetime import timedelta
 
 from fastapi import HTTPException, status
@@ -18,6 +20,7 @@ from app.core.security import (
     validate_password_strength,
     verify_password,
 )
+from app.integrations.gmail_client import GmailApiError, send_email
 from app.models.auth import (
     CCLoginAudit,
     CCUser,
@@ -41,14 +44,38 @@ from app.schemas.auth import (
     ClinicAccessResponse,
     CurrentUserResponse,
     RoleResponse,
-    TokenResponse,
 )
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class IssuedTokens:
+    """Internal carrier for a freshly issued token pair.
+
+    Deliberately not the TokenResponse schema: the refresh token here is
+    only ever meant to be set as an HttpOnly cookie by the route layer,
+    never serialized into a JSON response body.
+    """
+
+    access_token: str
+    refresh_token: str
+    expires_in: int
+    user: CurrentUserResponse
+
 
 INVALID_CREDENTIALS_ERROR = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
     detail="Invalid email or password.",
     headers={"WWW-Authenticate": "Bearer"},
 )
+
+# A precomputed hash with no corresponding real user, verified against on
+# the user-not-found login path so that branch costs roughly the same
+# Argon2 work as the wrong-password branch - otherwise the two are
+# distinguishable by response timing, a minor user-enumeration side
+# channel despite both returning the same generic error.
+_DUMMY_PASSWORD_HASH = hash_password("Dummy-Verification-Hash-Not-A-Real-Password-1!")
 
 INVALID_REFRESH_TOKEN_ERROR = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -67,7 +94,6 @@ def build_current_user_response(
         last_name=user.last_name,
         phone=user.phone,
         is_active=user.is_active,
-        is_email_verified=user.is_email_verified,
         must_change_password=user.must_change_password,
         last_login_at=user.last_login_at,
         roles=[
@@ -124,6 +150,10 @@ def authenticate_user(
     user = get_user_by_email(db, normalized_email)
 
     if user is None:
+        # Spends the same Argon2-verification time a real wrong-password
+        # attempt would, so this branch isn't distinguishable by timing.
+        verify_password(password, _DUMMY_PASSWORD_HASH)
+
         record_login_attempt(
             db,
             email=normalized_email,
@@ -139,6 +169,11 @@ def authenticate_user(
     now = utc_now()
 
     if not user.is_active:
+        # A distinct status/message here would let a caller distinguish
+        # "this account exists but is deactivated" from "wrong password" -
+        # a minor account-enumeration leak. The real reason is still
+        # captured in CCLoginAudit.failure_reason for support/admin use;
+        # the HTTP response stays generic like every other failure mode.
         record_login_attempt(
             db,
             email=normalized_email,
@@ -150,10 +185,7 @@ def authenticate_user(
         )
         db.commit()
 
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive.",
-        )
+        raise INVALID_CREDENTIALS_ERROR
 
     if user.locked_until and ensure_utc(user.locked_until) > now:
         record_login_attempt(
@@ -222,7 +254,7 @@ def issue_tokens(
     user: CCUser,
     ip_address: str | None,
     user_agent: str | None,
-) -> TokenResponse:
+) -> IssuedTokens:
     access_token = create_access_token(
         subject=str(user.id),
         additional_claims={
@@ -231,34 +263,23 @@ def issue_tokens(
         },
     )
 
-    temporary_refresh_token = create_refresh_token(
-        subject=str(user.id),
-        session_id=0,
-    )
-
+    refresh_token = create_refresh_token(subject=str(user.id))
     refresh_expires_at = utc_now() + timedelta(days=settings.jwt_refresh_token_expire_days)
 
-    session = create_session(
+    create_session(
         db,
         user_id=user.id,
-        refresh_token_hash=hash_token(temporary_refresh_token),
+        refresh_token_hash=hash_token(refresh_token),
         expires_at=refresh_expires_at,
         user_agent=user_agent,
         ip_address=ip_address,
     )
 
-    final_refresh_token = create_refresh_token(
-        subject=str(user.id),
-        session_id=session.id,
-    )
-
-    session.refresh_token_hash = hash_token(final_refresh_token)
-
     db.commit()
 
-    return TokenResponse(
+    return IssuedTokens(
         access_token=access_token,
-        refresh_token=final_refresh_token,
+        refresh_token=refresh_token,
         expires_in=settings.jwt_access_token_expire_minutes * 60,
         user=build_current_user_response(user),
     )
@@ -271,7 +292,7 @@ def login(
     password: str,
     ip_address: str | None,
     user_agent: str | None,
-) -> TokenResponse:
+) -> IssuedTokens:
     user = authenticate_user(
         db,
         email=email,
@@ -294,7 +315,7 @@ def refresh_tokens(
     refresh_token: str,
     ip_address: str | None,
     user_agent: str | None,
-) -> TokenResponse:
+) -> IssuedTokens:
     try:
         payload = decode_token(refresh_token)
     except ValueError as exc:
@@ -430,11 +451,42 @@ def change_password(
     db.commit()
 
 
+def _send_password_reset_email(
+    user: CCUser,
+    raw_token: str,
+) -> None:
+    reset_link = f"{settings.frontend_base_url.rstrip('/')}/reset-password?token={raw_token}"
+
+    html_body = f"""
+<p>Hi {user.first_name},</p>
+<p>We received a request to reset your ScanX Command Center password.</p>
+<p><a href="{reset_link}">Reset your password</a></p>
+<p>This link expires in {settings.password_reset_token_expire_minutes} minutes.
+If you didn't request this, you can safely ignore this email.</p>
+""".strip()
+
+    try:
+        send_email(
+            to=[user.email],
+            cc=[],
+            bcc=[],
+            subject="Reset your ScanX Command Center password",
+            html_body=html_body,
+            attachments=[],
+        )
+    except (GmailApiError, RuntimeError):
+        # The forgot-password endpoint always returns the same generic
+        # message regardless of outcome (no account-enumeration signal) -
+        # a delivery failure here must not surface to the caller, but must
+        # still be observable operationally.
+        logger.exception("Failed to send password reset email to user_id=%s", user.id)
+
+
 def request_password_reset(
     db: Session,
     *,
     email: str,
-) -> str | None:
+) -> None:
     normalized_email = email.strip().lower()
     user = get_user_by_email(db, normalized_email)
 
@@ -461,7 +513,9 @@ def request_password_reset(
 
     db.commit()
 
-    return raw_token
+    _send_password_reset_email(user, raw_token)
+
+    return None
 
 
 def reset_password(

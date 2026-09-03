@@ -240,7 +240,6 @@ def create_test_user(
         phone=None,
         password_hash=hash_password(password),
         is_active=is_active,
-        is_email_verified=True,
         must_change_password=must_change_password,
         failed_login_attempts=0,
     )
@@ -342,7 +341,11 @@ def client(
     app.dependency_overrides[get_db] = override_get_db
 
     try:
-        with TestClient(app) as test_client:
+        # base_url must be https:// so the test transport's cookie jar
+        # actually resends the Secure-flagged refresh/CSRF cookies on
+        # subsequent requests - matching real deployment (Cloud Run is
+        # HTTPS-only) rather than weakening the Secure flag for tests.
+        with TestClient(app, base_url="https://testserver") as test_client:
             yield test_client
     finally:
         app.dependency_overrides.clear()
@@ -438,9 +441,11 @@ def admin_tokens(
 
     payload = response.json()
 
+    # The refresh token is no longer in the body - it's set as an
+    # HttpOnly cookie on `client` directly, available to any later
+    # request made through the same TestClient instance.
     return {
         "access_token": payload["access_token"],
-        "refresh_token": payload["refresh_token"],
     }
 
 
@@ -471,7 +476,6 @@ def sonographer_tokens(
 
     return {
         "access_token": payload["access_token"],
-        "refresh_token": payload["refresh_token"],
     }
 
 

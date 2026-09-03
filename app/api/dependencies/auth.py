@@ -59,11 +59,31 @@ def get_current_user(
     return user
 
 
+def require_password_change_complete(
+    current_user: CCUser = Depends(get_current_user),
+) -> CCUser:
+    """Blocks access to business endpoints while a user still has an
+    admin-set or self-requested temporary password pending change.
+
+    Deliberately not folded into get_current_user itself: /auth/me and
+    /auth/change-password depend on get_current_user directly (not this),
+    since a user in this state still needs to read their own profile and
+    change their password before anything else works.
+    """
+    if current_user.must_change_password:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Password change is required before continuing.",
+        )
+
+    return current_user
+
+
 def require_permission(
     permission_code: str,
 ) -> Callable[[CCUser], CCUser]:
     def permission_dependency(
-        current_user: CCUser = Depends(get_current_user),
+        current_user: CCUser = Depends(require_password_change_complete),
     ) -> CCUser:
         permissions = collect_permission_codes(current_user)
 
@@ -82,7 +102,7 @@ def require_role(
     role_code: str,
 ) -> Callable[[CCUser], CCUser]:
     def role_dependency(
-        current_user: CCUser = Depends(get_current_user),
+        current_user: CCUser = Depends(require_password_change_complete),
     ) -> CCUser:
         roles = collect_role_codes(current_user)
 
