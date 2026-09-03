@@ -76,7 +76,7 @@ def _send_temporary_password_email(
         # the account/reset action itself already succeeded and must not
         # be rolled back over a delivery failure - just make it
         # observable operationally.
-        logger.exception("Failed to send temporary password email to %s", to_email)
+        logger.exception("Account setup email delivery failed", to_email)
 
 
 def build_user_response(

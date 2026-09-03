@@ -479,7 +479,7 @@ If you didn't request this, you can safely ignore this email.</p>
         # message regardless of outcome (no account-enumeration signal) -
         # a delivery failure here must not surface to the caller, but must
         # still be observable operationally.
-        logger.exception("Failed to send password reset email to user_id=%s", user.id)
+        logger.exception("Account recovery email delivery failed for user_id=%s", user.id)
 
 
 def request_password_reset(
