@@ -82,10 +82,16 @@ def locate_tricefy_blob(
     folders_iterator = bucket.list_blobs(prefix=_TRICEFY_PREFIX, delimiter="/")
     list(folders_iterator)  # Must be exhausted before .prefixes is populated.
 
+    # Case-insensitive: Tricefy folder names are usually all-caps
+    # ("DOE^JANE^_20260101"), but not always - some exports (and the
+    # appointment_id-infixed variant, e.g. "Tester^Tester^_APT123_20260914")
+    # preserve the original name's casing. folder_marker/date_suffix are
+    # already uppercased above, so only the actual prefix needs folding here.
     matching_folders = [
         prefix
         for prefix in folders_iterator.prefixes
-        if prefix[len(_TRICEFY_PREFIX) :].startswith(folder_marker) and prefix.endswith(date_suffix)
+        if prefix[len(_TRICEFY_PREFIX) :].upper().startswith(folder_marker)
+        and prefix.upper().endswith(date_suffix)
     ]
 
     if len(matching_folders) != 1:

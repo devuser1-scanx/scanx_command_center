@@ -12,10 +12,12 @@ from app.models.auth import CCUser
 from app.schemas.fax import FaxReportLookupResponse, SendFaxResponse
 from app.schemas.mail import SendMailResponse
 from app.schemas.patients import PatientProfileResponse, PatientSearchResponse
+from app.schemas.report_links import ReportLinkResponse
 from app.schemas.sms import SendSmsResponse, SmsPrefillResponse
 from app.services.fax import lookup_patient_report, send_patient_fax
 from app.services.mail import send_patient_mail
 from app.services.patients import get_patient_profile, search_patients
+from app.services.report_links import create_report_link_for_appointment
 from app.services.sms import get_sms_prefill, send_patient_sms
 
 router = APIRouter(prefix="/patients")
@@ -130,4 +132,16 @@ def send_sms_route(
         destination_number=destination_number,
         body=body,
         actor=current_user,
+    )
+
+
+@router.post("/{appointment_id}/report-link", response_model=ReportLinkResponse)
+def create_report_link_route(
+    appointment_id: str,
+    prod_db: Session = Depends(get_prod_db),
+    current_user: CCUser = Depends(require_permission("patients.sms")),
+) -> ReportLinkResponse:
+    return create_report_link_for_appointment(
+        prod_db,
+        appointment_id=appointment_id,
     )
