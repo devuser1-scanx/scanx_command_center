@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-Tone = Literal["orange", "blue", "green", "red", "purple"]
+Tone = Literal["purple", "green", "pink", "yellow", "red", "teal", "blue"]
 
 
 class ClinicResponse(BaseModel):
@@ -24,6 +24,7 @@ class TimelineAppointmentResponse(BaseModel):
     time: str
     status: str
     tone: Tone
+    paid: bool
     duration_minutes: int
 
 

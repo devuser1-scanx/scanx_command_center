@@ -8,6 +8,7 @@ from pydantic import BaseModel
 class SmsPrefillResponse(BaseModel):
     phone: str | None
     directions_link: str | None
+    google_review_link: str | None
 
 
 class SendSmsResponse(BaseModel):

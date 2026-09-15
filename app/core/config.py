@@ -83,6 +83,13 @@ class Settings(BaseSettings):
     twilio_messaging_service_sid: str | None = None
     twilio_from_number: str | None = None
 
+    # Acuity Scheduling API - used to fetch the live reschedule link for a
+    # patient's appointment. Acuity's v1 API uses HTTP Basic Auth: the
+    # account's User ID as the username, its API Key as the password (both
+    # found in Acuity under Business Settings > Integrations > API).
+    acuity_user_id: str | None = None
+    acuity_api_key: str | None = None
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]

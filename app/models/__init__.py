@@ -11,6 +11,7 @@ from app.models.auth import (
     CCUserRole,
 )
 from app.models.fax import CCFaxTransmission
+from app.models.google_reviews import CCGoogleReview
 from app.models.mail import CCMailTransmission
 from app.models.sms import CCSmsTransmission
 
@@ -26,6 +27,7 @@ __all__ = [
     "CCLoginAudit",
     "CCUserActivityAudit",
     "CCFaxTransmission",
+    "CCGoogleReview",
     "CCMailTransmission",
     "CCSmsTransmission",
 ]

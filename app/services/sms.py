@@ -6,26 +6,44 @@ from sqlalchemy.orm import Session
 
 from app.integrations.twilio_client import TwilioApiError, send_sms
 from app.models.auth import CCUser
+from app.repositories.google_reviews import get_google_review_url
 from app.repositories.patients import get_appointment_by_appointment_id, get_clinic
 from app.repositories.sms import create_sms_transmission
 from app.schemas.sms import SendSmsResponse, SmsPrefillResponse
 
 
-def get_sms_prefill(prod_db: Session, appointment_id: str) -> SmsPrefillResponse:
+def get_sms_prefill(
+    db: Session,
+    prod_db: Session,
+    appointment_id: str,
+) -> SmsPrefillResponse:
     """Looks up the patient's phone number and, if their appointment has a
-    clinic on file, that clinic's Google Maps link - used to prefill the
-    "To" field and the Directions message template.
+    clinic on file, that clinic's Google Maps link and Google review link -
+    used to prefill the "To" field and the Directions/Ask For Review message
+    templates.
+
+    The Google review link lives in Command Center's own database
+    (cc_google_reviews), not the production one the appointment/clinic
+    lookup uses - see app/models/google_reviews.py.
     """
     appointment = get_appointment_by_appointment_id(prod_db, appointment_id)
 
     if appointment is None:
-        return SmsPrefillResponse(phone=None, directions_link=None)
+        return SmsPrefillResponse(
+            phone=None,
+            directions_link=None,
+            google_review_link=None,
+        )
 
     clinic = get_clinic(prod_db, appointment.clinic_id) if appointment.clinic_id else None
+    google_review_link = (
+        get_google_review_url(db, appointment.clinic_id) if appointment.clinic_id else None
+    )
 
     return SmsPrefillResponse(
         phone=appointment.phone,
         directions_link=clinic.map_link if clinic else None,
+        google_review_link=google_review_link,
     )
 
 

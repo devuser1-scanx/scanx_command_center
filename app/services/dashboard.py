@@ -36,25 +36,55 @@ def derive_status_and_tone(appointment: Appointment) -> tuple[str, Tone]:
     rather than the `checkin` column - `checkin` was observed getting set
     without a matching real arrival, while `token_used` tracks the actual
     check-in action.
+
+    `status_label == "Confirmed"` does not actually mean the patient
+    confirmed - on the production data it means the appointment was paid.
+    It only reflects real confirmation when `prep_ack` is also true (the
+    patient acknowledged prep instructions); otherwise it's shown as "Paid".
+    The `confirmed` boolean column is unaffected by this and still means
+    real confirmation on its own.
     """
     status_label = (appointment.status_label or "").strip()
 
-    if appointment.canceled:
-        return "Cancelled", "red"
+    if appointment.canceled or status_label == "Cancelled":
+        return "Cancelled", "purple"
 
     if status_label == "No Show":
         return "No Show", "red"
 
     if status_label in ("Completed", "Complete"):
-        return "Completed", "green"
+        return "Completed", "pink"
 
-    if appointment.token_used:
-        return "Checked In", "orange"
+    if appointment.token_used or status_label == "Checked In":
+        return "Checked In", "green"
 
-    if appointment.confirmed or status_label == "Confirmed":
-        return "Confirmed", "blue"
+    if status_label == "Confirmed":
+        if appointment.prep_ack:
+            return "Confirmed", "yellow"
+        return "Paid", "teal"
 
-    return "Scheduled", "purple"
+    if appointment.confirmed:
+        return "Confirmed", "yellow"
+
+    return "Scheduled", "blue"
+
+
+def is_paid(appointment: Appointment) -> bool:
+    """
+    Used to show a paid marker on appointments whose card isn't already
+    showing the "Paid" color itself (i.e. ones where prep_ack/token_used
+    bumped them to Confirmed/Checked In instead).
+
+    Checks the `paid` column directly rather than relying only on
+    `status_label == "Confirmed"` - status_label moves on to other values
+    once the appointment progresses (e.g. after check-in), so it stops
+    reflecting payment even though the appointment is still paid. Kept as a
+    fallback anyway since `status_label == "Confirmed"` is still evidence of
+    payment while it holds (see derive_status_and_tone).
+    """
+    return bool(appointment.paid) or (
+        (appointment.status_label or "").strip() == "Confirmed"
+    )
 
 
 def build_patient_name(appointment: Appointment) -> str:
@@ -86,6 +116,7 @@ def to_timeline_appointment(
         time=build_local_time(appointment, clinic_timezone),
         status=status,
         tone=tone,
+        paid=is_paid(appointment),
         duration_minutes=appointment.duration or DEFAULT_DURATION_MINUTES,
     )
 
@@ -109,7 +140,6 @@ def get_dashboard_timeline(
                 clinic_timezone=clinic_timezones.get(appointment.clinic_id),
             )
             for appointment in appointments
-            if not appointment.canceled
         ],
     )
 

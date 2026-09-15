@@ -13,11 +13,13 @@ from app.schemas.fax import FaxReportLookupResponse, SendFaxResponse
 from app.schemas.mail import SendMailResponse
 from app.schemas.patients import PatientProfileResponse, PatientSearchResponse
 from app.schemas.report_links import ReportLinkResponse
+from app.schemas.reschedule_links import RescheduleLinkResponse
 from app.schemas.sms import SendSmsResponse, SmsPrefillResponse
 from app.services.fax import lookup_patient_report, send_patient_fax
 from app.services.mail import send_patient_mail
 from app.services.patients import get_patient_profile, search_patients
 from app.services.report_links import create_report_link_for_appointment
+from app.services.reschedule_links import create_reschedule_link_for_appointment
 from app.services.sms import get_sms_prefill, send_patient_sms
 
 router = APIRouter(prefix="/patients")
@@ -110,10 +112,11 @@ def send_mail_route(
 @router.get("/{appointment_id}/sms/prefill", response_model=SmsPrefillResponse)
 def get_sms_prefill_route(
     appointment_id: str,
+    db: Session = Depends(get_db),
     prod_db: Session = Depends(get_prod_db),
     current_user: CCUser = Depends(require_permission("patients.sms")),
 ) -> SmsPrefillResponse:
-    return get_sms_prefill(prod_db, appointment_id)
+    return get_sms_prefill(db, prod_db, appointment_id)
 
 
 @router.post("/{appointment_id}/sms", response_model=SendSmsResponse)
@@ -145,3 +148,11 @@ def create_report_link_route(
         prod_db,
         appointment_id=appointment_id,
     )
+
+
+@router.post("/{appointment_id}/reschedule-link", response_model=RescheduleLinkResponse)
+def create_reschedule_link_route(
+    appointment_id: str,
+    current_user: CCUser = Depends(require_permission("patients.sms")),
+) -> RescheduleLinkResponse:
+    return create_reschedule_link_for_appointment(appointment_id=appointment_id)
