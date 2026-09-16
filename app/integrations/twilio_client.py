@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import NamedTuple
+
 import httpx
 
 from app.core.config import settings
@@ -13,7 +15,16 @@ class TwilioApiError(Exception):
         self.message = message
 
 
-def send_sms(*, to: str, body: str) -> str:
+class TwilioSendResult(NamedTuple):
+    message_sid: str
+    # The number/sender id Twilio actually sent from - present even when
+    # sending via a Messaging Service (which resolves to one of its senders
+    # under the hood). Used to record who a message was sent "from" in
+    # production's own messages table.
+    from_number: str | None
+
+
+def send_sms(*, to: str, body: str) -> TwilioSendResult:
     """Sends one text message via Twilio's Messages API.
 
     Prefers a Messaging Service (TWILIO_MESSAGING_SERVICE_SID) over a bare
@@ -21,8 +32,6 @@ def send_sms(*, to: str, body: str) -> str:
     sender is attached to the Messaging Service in the Twilio Console,
     Twilio sends via RCS when the recipient's device supports it and falls
     back to SMS automatically, with no branching needed here.
-
-    Returns the Twilio message SID on success.
     """
     if not (settings.twilio_account_sid and settings.twilio_auth_token):
         raise RuntimeError(
@@ -64,4 +73,4 @@ def send_sms(*, to: str, body: str) -> str:
     if not message_sid:
         raise TwilioApiError("Twilio response did not include a message sid.")
 
-    return message_sid
+    return TwilioSendResult(message_sid=message_sid, from_number=payload.get("from"))

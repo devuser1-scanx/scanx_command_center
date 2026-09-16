@@ -82,9 +82,7 @@ def is_paid(appointment: Appointment) -> bool:
     fallback anyway since `status_label == "Confirmed"` is still evidence of
     payment while it holds (see derive_status_and_tone).
     """
-    return bool(appointment.paid) or (
-        (appointment.status_label or "").strip() == "Confirmed"
-    )
+    return bool(appointment.paid) or ((appointment.status_label or "").strip() == "Confirmed")
 
 
 def build_patient_name(appointment: Appointment) -> str:

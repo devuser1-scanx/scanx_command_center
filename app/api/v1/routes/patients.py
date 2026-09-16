@@ -12,15 +12,21 @@ from app.models.auth import CCUser
 from app.schemas.fax import FaxReportLookupResponse, SendFaxResponse
 from app.schemas.mail import SendMailResponse
 from app.schemas.patients import PatientProfileResponse, PatientSearchResponse
+from app.schemas.pcp_form_links import PcpFormLinkResponse
 from app.schemas.report_links import ReportLinkResponse
 from app.schemas.reschedule_links import RescheduleLinkResponse
+from app.schemas.scrotal_form_links import ScrotalFormLinkResponse
 from app.schemas.sms import SendSmsResponse, SmsPrefillResponse
+from app.schemas.transvag_form_links import TransvagFormLinkResponse
 from app.services.fax import lookup_patient_report, send_patient_fax
 from app.services.mail import send_patient_mail
 from app.services.patients import get_patient_profile, search_patients
+from app.services.pcp_form_links import create_pcp_form_link_for_appointment
 from app.services.report_links import create_report_link_for_appointment
 from app.services.reschedule_links import create_reschedule_link_for_appointment
+from app.services.scrotal_form_links import create_scrotal_form_link_for_appointment
 from app.services.sms import get_sms_prefill, send_patient_sms
+from app.services.transvag_form_links import create_transvag_form_link_for_appointment
 
 router = APIRouter(prefix="/patients")
 
@@ -126,10 +132,12 @@ def send_sms_route(
     destination_number: str = Form(...),
     body: str = Form(...),
     db: Session = Depends(get_db),
+    prod_db: Session = Depends(get_prod_db),
     current_user: CCUser = Depends(require_permission("patients.sms")),
 ) -> SendSmsResponse:
     return send_patient_sms(
         db,
+        prod_db,
         appointment_id=appointment_id,
         purpose=purpose,
         destination_number=destination_number,
@@ -156,3 +164,39 @@ def create_reschedule_link_route(
     current_user: CCUser = Depends(require_permission("patients.sms")),
 ) -> RescheduleLinkResponse:
     return create_reschedule_link_for_appointment(appointment_id=appointment_id)
+
+
+@router.post("/{appointment_id}/pcp-form-link", response_model=PcpFormLinkResponse)
+def create_pcp_form_link_route(
+    appointment_id: str,
+    prod_db: Session = Depends(get_prod_db),
+    current_user: CCUser = Depends(require_permission("patients.sms")),
+) -> PcpFormLinkResponse:
+    return create_pcp_form_link_for_appointment(
+        prod_db,
+        appointment_id=appointment_id,
+    )
+
+
+@router.post("/{appointment_id}/scrotal-form-link", response_model=ScrotalFormLinkResponse)
+def create_scrotal_form_link_route(
+    appointment_id: str,
+    prod_db: Session = Depends(get_prod_db),
+    current_user: CCUser = Depends(require_permission("patients.sms")),
+) -> ScrotalFormLinkResponse:
+    return create_scrotal_form_link_for_appointment(
+        prod_db,
+        appointment_id=appointment_id,
+    )
+
+
+@router.post("/{appointment_id}/transvag-form-link", response_model=TransvagFormLinkResponse)
+def create_transvag_form_link_route(
+    appointment_id: str,
+    prod_db: Session = Depends(get_prod_db),
+    current_user: CCUser = Depends(require_permission("patients.sms")),
+) -> TransvagFormLinkResponse:
+    return create_transvag_form_link_for_appointment(
+        prod_db,
+        appointment_id=appointment_id,
+    )

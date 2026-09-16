@@ -90,6 +90,11 @@ class Settings(BaseSettings):
     acuity_user_id: str | None = None
     acuity_api_key: str | None = None
 
+    # JotForm - not currently called by anything (the PCP form link is a
+    # plain query-string prefill URL, no API request needed to build it).
+    # Kept here per request for whatever JotForm API call comes next.
+    jotform_api_key: str | None = None
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]

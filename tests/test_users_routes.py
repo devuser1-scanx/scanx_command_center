@@ -45,9 +45,7 @@ def test_create_user_generates_password_and_emails_it(
     assert sent["to"] == ["new-hire@example.com"]
     assert "Temporary password:" in sent["html_body"]
 
-    created_user = db_session.scalar(
-        select(CCUser).where(CCUser.email == "new-hire@example.com")
-    )
+    created_user = db_session.scalar(select(CCUser).where(CCUser.email == "new-hire@example.com"))
     assert created_user is not None
     assert created_user.must_change_password is True
 

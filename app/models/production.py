@@ -130,6 +130,10 @@ class FormTracking(ProdBase):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     appointment_id: Mapped[str] = mapped_column(Text, nullable=False)
+    patient_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dob: Mapped[str | None] = mapped_column(Text, nullable=True)
+    appointment_date: Mapped[str | None] = mapped_column(Text, nullable=True)
+    appointment_type: Mapped[str | None] = mapped_column(Text, nullable=True)
     form_type: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -143,8 +147,11 @@ class Message(ProdBase):
     appointment_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
     direction: Mapped[str | None] = mapped_column(String(10), nullable=True)
     channel: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    message_sid: Mapped[str | None] = mapped_column(String(64), nullable=True)
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    sender: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    recipient: Mapped[str | None] = mapped_column(String(50), nullable=True)
     timestamp: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
 
 

@@ -25,9 +25,15 @@ def get_prod_session_factory() -> sessionmaker[Session]:
 
 def get_prod_db() -> Generator[Session, None, None]:
     """
-    Read-only session bound to the production ScanX database. Repository
-    functions using this session must never call add()/commit()/delete() -
-    Command Center only ever SELECTs from this connection.
+    Session bound to the production ScanX database. Treat as read-only:
+    repository functions using this session must never call
+    add()/commit()/delete() - Command Center only ever SELECTs from this
+    connection - EXCEPT the two explicitly-approved writes in
+    app/repositories/production_writes.py (recording sent SMS into
+    `messages`, and sent form links into `form_tracking`), which exist so
+    Command Center's own sends show up in the same history production's
+    other systems already write to. Do not add further writes here without
+    the same explicit sign-off.
     """
     session_factory = get_prod_session_factory()
     db = session_factory()
