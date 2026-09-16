@@ -3,6 +3,7 @@
 Revision ID: 0004_seed_initial_admin
 Revises: 0003
 """
+
 from __future__ import annotations
 
 import os
@@ -17,6 +18,7 @@ revision = "0004_seed_initial_admin"
 down_revision = "0003"
 branch_labels = None
 depends_on = None
+
 
 def upgrade() -> None:
     connection = op.get_bind()
@@ -51,9 +53,7 @@ def upgrade() -> None:
         password = os.getenv("INITIAL_ADMIN_PASSWORD")
 
         if not password:
-            raise RuntimeError(
-                "INITIAL_ADMIN_PASSWORD is required to seed the initial admin."
-            )
+            raise RuntimeError("INITIAL_ADMIN_PASSWORD is required to seed the initial admin.")
 
         user_id = connection.execute(
             sa.text(
@@ -87,9 +87,7 @@ def upgrade() -> None:
                 "email": email,
                 "first_name": "Bhavin",
                 "last_name": "ScanX",
-                "password_hash": hash_password(
-                    password
-                ),
+                "password_hash": hash_password(password),
             },
         ).scalar_one()
 

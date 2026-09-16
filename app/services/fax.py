@@ -32,7 +32,7 @@ def _normalize_fax_number(raw: str) -> str:
 
 
 def _build_fax_subject(appointment: Appointment | None) -> str:
-    """"Firstname Lastname Fibroscan Report" for FibroScan / Liver
+    """ "Firstname Lastname Fibroscan Report" for FibroScan / Liver
     Elastography appointments, "Firstname Lastname <appointment type>
     Report" for everything else. Falls back to fax_email_subject if the
     appointment - or its name/type - isn't available.

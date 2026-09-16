@@ -237,6 +237,4 @@ def reset_user_password_as_admin(
         user_agent=get_user_agent(request),
     )
 
-    return MessageResponse(
-        message=("A new temporary password has been emailed to the user.")
-    )
+    return MessageResponse(message=("A new temporary password has been emailed to the user."))

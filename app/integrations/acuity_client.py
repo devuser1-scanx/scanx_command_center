@@ -47,8 +47,6 @@ def get_reschedule_link(*, appointment_id: str) -> str:
     confirmation_page = payload.get("confirmationPage")
 
     if not confirmation_page:
-        raise AcuityApiError(
-            "Acuity's response did not include a confirmationPage URL."
-        )
+        raise AcuityApiError("Acuity's response did not include a confirmationPage URL.")
 
     return confirmation_page
