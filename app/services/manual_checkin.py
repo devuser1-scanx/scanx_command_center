@@ -482,13 +482,10 @@ def _send_checkin_confirmation_sms_best_effort(
         )
         return "failed_no_checkin_time"
 
-    checked_in_time = _format_checkin_time_for_patient_sms(
-        checked_in_at
-    )
 
     body = (
         "You're checked in. We have informed sonographers; "
-        "please wait and someone will attend you shortly.\n"
+        "please wait and someone will attend you shortly."
         
     )
 
