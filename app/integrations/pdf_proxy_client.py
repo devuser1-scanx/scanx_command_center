@@ -24,23 +24,116 @@ def create_short_url(*, gcs_blob_name: str) -> str:
 
     try:
         with httpx.Client(timeout=15.0) as client:
-            response = client.post(url, json={"fileName": gcs_blob_name})
+            response = client.post(
+                url,
+                json={
+                    "fileName": gcs_blob_name,
+                },
+            )
     except httpx.HTTPError as exc:
-        raise PdfProxyApiError(f"Could not reach the report link service: {exc}") from exc
+        raise PdfProxyApiError(
+            f"Could not reach the report link service: {exc}"
+        ) from exc
 
     if response.status_code >= 400:
         try:
             payload = response.json()
-            error_message = payload.get("error", response.text)
+            error_message = payload.get(
+                "error",
+                response.text,
+            )
         except ValueError:
             error_message = response.text
 
-        raise PdfProxyApiError(error_message)
+        raise PdfProxyApiError(
+            error_message
+        )
 
-    payload = response.json()
-    short_url = payload.get("shortUrl")
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise PdfProxyApiError(
+            "The report link service returned an invalid JSON response."
+        ) from exc
+
+    short_url = payload.get(
+        "shortUrl"
+    )
 
     if not short_url:
-        raise PdfProxyApiError("The report link service did not return a shortUrl.")
+        raise PdfProxyApiError(
+            "The report link service did not return a shortUrl."
+        )
 
-    return short_url
+    return str(short_url)
+
+
+def lookup_previous_report_link(
+    *,
+    first_name: str | None,
+    last_name: str | None,
+    appointment_id: str,
+) -> str | None:
+    """
+    Ask the existing ScanX PDF proxy for the previous appointment's
+    report short URL.
+
+    Returns None when the service reports that no previous report was found.
+    """
+    url = (
+        f"{settings.pdf_proxy_base_url.rstrip('/')}"
+        "/api/lookup-previous-report"
+    )
+
+    try:
+        with httpx.Client(
+            timeout=15.0,
+        ) as client:
+            response = client.post(
+                url,
+                json={
+                    "firstName": first_name or "",
+                    "lastName": last_name or "",
+                    "appointmentId": appointment_id,
+                },
+            )
+
+    except httpx.HTTPError as exc:
+        raise PdfProxyApiError(
+            f"Could not reach the report link service: {exc}"
+        ) from exc
+
+    if response.status_code >= 400:
+        try:
+            payload = response.json()
+            error_message = (
+                payload.get("error")
+                or payload.get("message")
+                or response.text
+            )
+        except ValueError:
+            error_message = response.text
+
+        raise PdfProxyApiError(
+            str(error_message)
+        )
+
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise PdfProxyApiError(
+            "The report link service returned an invalid JSON response."
+        ) from exc
+
+    if not payload.get("found"):
+        return None
+
+    short_url = payload.get(
+        "shortUrl"
+    )
+
+    return (
+        str(short_url)
+        if short_url
+        else None
+    )

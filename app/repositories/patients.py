@@ -18,7 +18,9 @@ from app.models.production import (
     Report,
     Upload,
 )
-from app.repositories.dashboard import list_appointments_for_day
+from app.repositories.dashboard import (
+    list_appointments_for_day,
+)
 
 SEARCH_RESULT_LIMIT = 200
 
@@ -31,11 +33,9 @@ def search_patients(
 ) -> list[Appointment]:
     """
     With no query, falls back to the given day's appointments across all
-    clinics (reusing the dashboard repository's clinic-timezone-aware day
-    boundary logic). With a query, matches appointment_id, name (first,
-    last, or "first last"), or phone (compared digit-only so formatting
-    like "(555) 222-0198" vs "5552220198" doesn't matter) - no date
-    restriction, since a patient's past visit should still be findable.
+    clinics.
+
+    With a query, matches appointment_id, patient name, or phone.
     """
     term = (query or "").strip()
 
@@ -43,18 +43,35 @@ def search_patients(
         if day is None:
             return []
 
-        return list_appointments_for_day(prod_db, clinic_id=None, day=day)
+        return list_appointments_for_day(
+            prod_db,
+            clinic_id=None,
+            day=day,
+        )
 
-    digits = re.sub(r"\D", "", term)
+    digits = re.sub(
+        r"\D",
+        "",
+        term,
+    )
 
     conditions = [
         Appointment.appointment_id.ilike(f"%{term}%"),
-        func.concat(Appointment.first_name, " ", Appointment.last_name).ilike(f"%{term}%"),
+        func.concat(
+            Appointment.first_name,
+            " ",
+            Appointment.last_name,
+        ).ilike(f"%{term}%"),
     ]
 
     if len(digits) >= 4:
         conditions.append(
-            func.regexp_replace(Appointment.phone, r"\D", "", "g").ilike(f"%{digits}%")
+            func.regexp_replace(
+                Appointment.phone,
+                r"\D",
+                "",
+                "g",
+            ).ilike(f"%{digits}%")
         )
 
     statement = (
@@ -92,54 +109,122 @@ def get_appointment_by_appointment_id(
     return prod_db.scalar(statement)
 
 
-def get_clinic(prod_db: Session, clinic_id: int) -> Clinic | None:
+def get_previous_checked_in_appointment(
+    prod_db: Session,
+    *,
+    appointment: Appointment,
+) -> Appointment | None:
+    """
+    Get the patient's immediately previous checked-in appointment.
+
+    This is used only to populate Previous Report on the Google Chat card.
+    """
+    if not appointment.phone or appointment.appointment_datetime is None:
+        return None
+
+    statement = (
+        select(Appointment)
+        .where(
+            Appointment.phone == appointment.phone,
+            Appointment.checkin.is_(True),
+            Appointment.appointment_id != appointment.appointment_id,
+            Appointment.appointment_datetime < appointment.appointment_datetime,
+        )
+        .order_by(Appointment.appointment_datetime.desc())
+        .limit(1)
+    )
+
+    return prod_db.scalar(statement)
+
+
+def get_clinic(
+    prod_db: Session,
+    clinic_id: int,
+) -> Clinic | None:
     statement = select(Clinic).where(Clinic.id == clinic_id)
+
     return prod_db.scalar(statement)
 
 
-def get_patient_intake(prod_db: Session, appointment_id: str) -> Patient | None:
+def get_patient_intake(
+    prod_db: Session,
+    appointment_id: str,
+) -> Patient | None:
     statement = select(Patient).where(Patient.appointment_id == appointment_id)
+
     return prod_db.scalar(statement)
 
 
-def get_checkin(prod_db: Session, appointment_id: str) -> Checkin | None:
+def get_checkin(
+    prod_db: Session,
+    appointment_id: str,
+) -> Checkin | None:
     statement = select(Checkin).where(Checkin.appointment_id == appointment_id)
+
     return prod_db.scalar(statement)
 
 
-def list_form_status(prod_db: Session, appointment_id: str) -> list[FormStatus]:
+def list_form_status(
+    prod_db: Session,
+    appointment_id: str,
+) -> list[FormStatus]:
     statement = select(FormStatus).where(FormStatus.appointment_id == appointment_id)
+
     return list(prod_db.scalars(statement).all())
 
 
-def list_form_tracking(prod_db: Session, appointment_id: str) -> list[FormTracking]:
-    statement = select(FormTracking).where(FormTracking.appointment_id == appointment_id)
+def list_form_tracking(
+    prod_db: Session,
+    appointment_id: str,
+) -> list[FormTracking]:
+    statement = (
+        select(FormTracking)
+        .where(FormTracking.appointment_id == appointment_id)
+        .order_by(FormTracking.form_type.asc())
+    )
+
     return list(prod_db.scalars(statement).all())
 
 
-def list_messages(prod_db: Session, appointment_id: str) -> list[Message]:
+def list_messages(
+    prod_db: Session,
+    appointment_id: str,
+) -> list[Message]:
     statement = (
         select(Message).where(Message.appointment_id == appointment_id).order_by(Message.timestamp)
     )
+
     return list(prod_db.scalars(statement).all())
 
 
-def list_call_logs(prod_db: Session, appointment_id: str) -> list[CallLog]:
+def list_call_logs(
+    prod_db: Session,
+    appointment_id: str,
+) -> list[CallLog]:
     statement = (
         select(CallLog).where(CallLog.appointment_id == appointment_id).order_by(CallLog.created_at)
     )
+
     return list(prod_db.scalars(statement).all())
 
 
-def list_reports(prod_db: Session, appointment_id: str) -> list[Report]:
+def list_reports(
+    prod_db: Session,
+    appointment_id: str,
+) -> list[Report]:
     statement = (
         select(Report).where(Report.appointment_id == appointment_id).order_by(Report.created_at)
     )
+
     return list(prod_db.scalars(statement).all())
 
 
-def list_uploads(prod_db: Session, appointment_id: str) -> list[Upload]:
+def list_uploads(
+    prod_db: Session,
+    appointment_id: str,
+) -> list[Upload]:
     statement = (
         select(Upload).where(Upload.appointment_id == appointment_id).order_by(Upload.uploaded_at)
     )
+
     return list(prod_db.scalars(statement).all())

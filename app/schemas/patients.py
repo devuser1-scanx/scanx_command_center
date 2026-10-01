@@ -124,3 +124,24 @@ class PatientProfileResponse(BaseModel):
     reports: list[ReportItem]
     uploads: list[UploadItem]
     payment: PaymentInfo
+
+
+class ManualCheckInIntegrationStatuses(BaseModel):
+    audit: str
+    acuity: str
+    google_chat: str
+    payment_reminder_rcs: str
+
+
+class ManualCheckInResponse(BaseModel):
+    success: bool
+    message: str
+
+    appointment_id: str
+
+    checked_in: bool
+    checked_in_at: datetime | None
+
+    already_checked_in: bool
+
+    integrations: ManualCheckInIntegrationStatuses
