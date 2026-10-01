@@ -6,10 +6,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# python:3.11-slim's Debian package snapshot lags behind upstream security
-# fixes (e.g. util-linux CVEs) - pulling the latest patches here is what the
-# Trivy scan in CI expects, since it flags known-fixed CVEs still present in
-# the base image's installed versions.
+# python:3.11-slim's Debian package snapshot can lag behind upstream security
+# fixes, so install the latest available Debian security updates before the
+# application image is built.
 RUN apt-get update && \
     apt-get upgrade -y && \
     rm -rf /var/lib/apt/lists/*
@@ -17,13 +16,16 @@ RUN apt-get update && \
 RUN addgroup --system scanx && adduser --system --ingroup scanx scanx
 
 COPY requirements.txt .
+
 RUN python -m pip install --no-cache-dir --upgrade \
         pip \
         "setuptools>=78.1.1" \
         wheel && \
     python -m pip install --no-cache-dir --upgrade --force-reinstall \
         -r requirements.txt && \
-    python -m pip check
+    python -m pip check && \
+    python -m pip uninstall -y pip && \
+    rm -rf /usr/local/lib/python3.11/ensurepip
 
 COPY alembic.ini .
 COPY migrations ./migrations
