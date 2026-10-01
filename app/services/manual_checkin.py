@@ -489,7 +489,7 @@ def _send_checkin_confirmation_sms_best_effort(
     body = (
         "You're checked in. We have informed sonographers; "
         "please wait and someone will attend you shortly.\n"
-        f"Checked-in time: {checked_in_time}"
+        
     )
 
     try:
