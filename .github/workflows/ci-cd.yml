@@ -1,658 +1,1316 @@
 name: FastAPI CI/CD to GCP Cloud Run
 
+
+
 on:
+
+
 
   push:
 
+
+
     branches:
+
+
 
       - main
 
+
+
       - dev
+
+
 
   pull_request:
 
+
+
     branches:
+
+
 
       - main
 
+
+
       - dev
+
+
 
 env:
 
+
+
   PYTHON_VERSION: "3.11"
+
+
 
 concurrency:
 
+
+
   group: ${{ github.workflow }}-${{ github.ref }}
+
+
 
   cancel-in-progress: false
 
+
+
 jobs:
+
+
 
   test:
 
+
+
     name: Test
 
+
+
     runs-on: ubuntu-latest
+
+
 
     services:
 
+
+
       postgres:
+
+
 
         image: postgres:15
 
+
+
         env:
+
+
 
           POSTGRES_USER: test_user
 
+
+
           POSTGRES_PASSWORD: test_password
+
+
 
           POSTGRES_DB: test_db
 
+
+
         ports:
 
+
+
           - 5432:5432
+
         options: >-
+
           --health-cmd="pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"
+
           --health-interval=10s
+
           --health-timeout=5s
+
           --health-retries=10
+
           --health-start-period=20s
+
     env:
+
+
 
       APP_ENV: test
 
+
+
       DEBUG: "false"
+
+
 
       DATABASE_URL: postgresql+psycopg://test_user:test_password@localhost:5432/test_db
 
+
+
       JWT_SECRET_KEY: test-secret-key-for-ci-that-is-long-enough
+
+
 
       CORS_ALLOWED_ORIGINS: http://localhost:5173,http://localhost:3000,https://scanx-command-center-fe-794794356928.us-central1.run.app
 
+
+
       INITIAL_ADMIN_PASSWORD: TestAdmin@2026
+
+
 
     steps:
 
+
+
       - name: Checkout
+
+
 
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
+
+
       - name: Setup Python
+
+
 
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
 
+
+
         with:
+
+
 
           python-version: ${{ env.PYTHON_VERSION }}
 
+
+
           cache: pip
+
+
 
           cache-dependency-path: requirements-dev.txt
 
+
+
       - name: Install dependencies
+
+
 
         run: |
 
+
+
           python -m pip install --upgrade pip
+
+
 
           pip install -r requirements-dev.txt
 
+
+
       - name: Lint
+
+
 
         run: ruff check .
 
+
+
       - name: Run migrations
+
+
 
         run: alembic upgrade head
 
+
+
       - name: Run tests
+
+
 
         run: python -m pytest
 
+
+
   security:
+
+
 
     name: Security
 
+
+
     runs-on: ubuntu-latest
+
+
 
     needs: test
 
+
+
     permissions:
+
+
 
       contents: read
 
+
+
       security-events: write
+
+
 
       actions: read
 
+
+
     steps:
+
+
 
       - name: Checkout
 
+
+
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
+
+
         with:
+
+
 
           fetch-depth: 0
 
+
+
       - name: Setup Python
+
+
 
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
 
+
+
         with:
+
+
 
           python-version: ${{ env.PYTHON_VERSION }}
 
+
+
           cache: pip
+
+
 
           cache-dependency-path: requirements.txt
 
+
+
       - name: Install security tools
 
+
+
         run: |
+
+
 
           python -m pip install --upgrade pip
 
-          pip install bandit pip-audit semgrep
+
+
+          pip install bandit pip-audit pipx
+          pipx install semgrep
+
+
 
       - name: Secret scan
 
+
+
         uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc
+
+
 
         env:
 
+
+
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
 
       - name: Python security scan
 
+
+
         run: bandit -r app -lll -iii
+
+
 
       - name: Dependency vulnerability scan
 
+
+
         run: pip-audit -r requirements.txt
+
+
 
       - name: Static analysis
 
+
+
         run: semgrep scan --config=p/python --config=p/owasp-top-ten --error
+
+
 
       - name: Filesystem vulnerability scan
 
+
+
         uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8
 
+
+
         with:
+
+
 
           scan-type: fs
 
+
+
           scan-ref: .
+
+
 
           severity: HIGH,CRITICAL
 
+
+
           ignore-unfixed: true
 
+
+
           exit-code: "1"
+
+
 
   deploy_staging:
 
+
+
     name: Build, Scan, Deploy to Staging
+
+
 
     runs-on: ubuntu-latest
 
+
+
     needs:
+
+
 
       - test
 
+
+
       - security
+
+
 
     if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
 
+
+
     permissions:
+
+
 
       contents: read
 
+
+
       id-token: write
+
+
 
       security-events: write
 
+
+
       actions: read
+
+
 
     environment: staging
 
+
+
     env:
+
+
 
       PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
 
+
+
       REGION: ${{ vars.GCP_REGION }}
+
+
 
       SERVICE_NAME: ${{ vars.CLOUD_RUN_SERVICE_STAGING }}
 
+
+
       ARTIFACT_REPO: ${{ vars.ARTIFACT_REPO }}
+
+
 
       IMAGE_NAME: ${{ vars.IMAGE_NAME }}
 
+
+
       CLOUDSQL_INSTANCE: ${{ vars.CLOUDSQL_INSTANCE }}
+
+
 
       DATABASE_NAME: ${{ vars.DATABASE_NAME_STAGING }}
 
+
+
       DATABASE_USER: ${{ vars.DATABASE_USER }}
 
+
+
       RUNTIME_SERVICE_ACCOUNT: ${{ vars.CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT }}
+
+
 
       MIGRATION_JOB_NAME: scanx-command-center-migrate-staging
 
+
+
       IMAGE_URI: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REPO }}/${{ vars.IMAGE_NAME }}:${{ github.sha }}-staging
+
+
 
       LATEST_IMAGE_URI: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REPO }}/${{ vars.IMAGE_NAME }}:staging-latest
 
+
+
     steps:
+
+
 
       - name: Checkout
 
+
+
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+
 
       - name: Authenticate to Google Cloud
 
+
+
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
 
+
+
         with:
+
+
 
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
 
+
+
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+
 
       - name: Setup gcloud
 
+
+
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+
+
 
       - name: Configure Docker for Artifact Registry
 
+
+
         run: gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
+
+
 
       - name: Build Docker image
 
+
+
         run: |
 
-          docker build \
 
-            --pull \
 
-            --no-cache \
+          docker build \\
 
-            -t "$IMAGE_URI" \
 
-            -t "$LATEST_IMAGE_URI" \
+
+            --pull \\
+
+
+
+            --no-cache \\
+
+
+
+            -t "$IMAGE_URI" \\
+
+
+
+            -t "$LATEST_IMAGE_URI" \\
+
+
 
             .
 
+
+
       - name: Verify patched Python packages
+
+
 
         run: |
 
-          docker run --rm "$IMAGE_URI" python -c \
+
+
+          docker run --rm "$IMAGE_URI" python -c \\
+
+
 
             "from importlib.metadata import version; print('msgpack:', version('msgpack')); print('setuptools:', version('setuptools'))"
 
+
+
       - name: Scan Docker image
+
+
 
         uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8
 
+
+
         with:
+
+
 
           image-ref: ${{ env.IMAGE_URI }}
 
+
+
           severity: HIGH,CRITICAL
+
+
 
           ignore-unfixed: true
 
+
+
           exit-code: "1"
+
+
 
           format: table
 
+
+
       - name: Push Docker image
+
+
 
         run: |
 
+
+
           docker push "$IMAGE_URI"
 
+
+
           docker push "$LATEST_IMAGE_URI"
+
+
 
       - name: Configure staging migration job
 
+
+
         run: |
 
-          gcloud run jobs deploy "$MIGRATION_JOB_NAME" \
 
-            --project="$PROJECT_ID" \
 
-            --region="$REGION" \
+          gcloud run jobs deploy "$MIGRATION_JOB_NAME" \\
 
-            --image="$IMAGE_URI" \
 
-            --service-account="$RUNTIME_SERVICE_ACCOUNT" \
 
-            --set-cloudsql-instances="$CLOUDSQL_INSTANCE" \
+            --project="$PROJECT_ID" \\
 
-            --set-env-vars="APP_ENV=staging,DEBUG=false,APP_NAME=scanx-command-center-api-staging,DATABASE_HOST=/cloudsql/$CLOUDSQL_INSTANCE,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER" \
 
-            --set-secrets="DATABASE_PASSWORD=scanx-staging-db-password:latest,JWT_SECRET_KEY=scanx-staging-jwt-secret:latest,INITIAL_ADMIN_PASSWORD=scanx-staging-initial-admin-password:latest" \
 
-            --command="alembic" \
+            --region="$REGION" \\
 
-            --args="upgrade,head" \
 
-            --tasks=1 \
 
-            --max-retries=0 \
+            --image="$IMAGE_URI" \\
 
-            --task-timeout=900s \
+
+
+            --service-account="$RUNTIME_SERVICE_ACCOUNT" \\
+
+
+
+            --set-cloudsql-instances="$CLOUDSQL_INSTANCE" \\
+
+
+
+            --set-env-vars="APP_ENV=staging,DEBUG=false,APP_NAME=scanx-command-center-api-staging,DATABASE_HOST=/cloudsql/$CLOUDSQL_INSTANCE,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER" \\
+
+
+
+            --set-secrets="DATABASE_PASSWORD=scanx-staging-db-password:latest,JWT_SECRET_KEY=scanx-staging-jwt-secret:latest,INITIAL_ADMIN_PASSWORD=scanx-staging-initial-admin-password:latest" \\
+
+
+
+            --command="alembic" \\
+
+
+
+            --args="upgrade,head" \\
+
+
+
+            --tasks=1 \\
+
+
+
+            --max-retries=0 \\
+
+
+
+            --task-timeout=900s \\
+
+
 
             --quiet
+
+
 
       - name: Migrate staging database
 
+
+
         run: |
 
-          gcloud run jobs execute "$MIGRATION_JOB_NAME" \
 
-            --project="$PROJECT_ID" \
 
-            --region="$REGION" \
+          gcloud run jobs execute "$MIGRATION_JOB_NAME" \\
+
+
+
+            --project="$PROJECT_ID" \\
+
+
+
+            --region="$REGION" \\
+
+
 
             --wait
+
+
 
       - name: Deploy to Cloud Run Staging
 
+
+
         id: deploy
+
+
 
         uses: google-github-actions/deploy-cloudrun@2028e2d7d30a78c6910e0632e48dd561b064884d
 
+
+
         with:
+
+
 
           service: ${{ env.SERVICE_NAME }}
 
+
+
           region: ${{ env.REGION }}
+
+
 
           image: ${{ env.IMAGE_URI }}
 
+
+
           flags: >-
+
+
 
             --allow-unauthenticated
 
+
+
             --port=8080
+
+
 
             --memory=512Mi
 
+
+
             --cpu=1
 
+
+
             --min-instances=0
+
+
 
             --max-instances=2
 
+
+
             --timeout=900
+
+
 
             --service-account=${{ env.RUNTIME_SERVICE_ACCOUNT }}
 
+
+
             --add-cloudsql-instances=${{ env.CLOUDSQL_INSTANCE }}
+
+
 
             --set-env-vars="^;^APP_ENV=staging;DEBUG=true;APP_NAME=scanx-command-center-api-staging;DATABASE_HOST=/cloudsql/${{ env.CLOUDSQL_INSTANCE }};DATABASE_NAME=${{ env.DATABASE_NAME }};DATABASE_USER=${{ env.DATABASE_USER }};CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000,https://scanx-command-center-fe-794794356928.us-central1.run.app;FRONTEND_BASE_URL=https://scanx-command-center-fe-794794356928.us-central1.run.app"
 
+
+
             --set-secrets=DATABASE_PASSWORD=scanx-staging-db-password:latest,JWT_SECRET_KEY=scanx-staging-jwt-secret:latest,PROD_DATABASE_URL=scanx-prod-database-url:latest,GMAIL_SENDER_EMAIL=GMAIL_SENDER_EMAIL:latest,GMAIL_SERVICE_ACCOUNT_JSON=GMAIL_SERVICE_ACCOUNT_JSON:latest,TWILIO_ACCOUNT_SID=TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=TWILIO_AUTH_TOKEN:latest,TWILIO_MESSAGING_SERVICE_SID=TWILIO_MESSAGING_SERVICE_SID:latest,ACUITY_USER_ID=ACUITY_USER_ID:latest,ACUITY_API_KEY=ACUITY_API_KEY:latest,ACUITY_CHECKED_IN_LABEL_ID=ACUITY_CHECKED_IN_LABEL_ID:latest,TWILIO_PAYMENT_TEMPLATE_SID=TWILIO_PAYMENT_TEMPLATE_SID:latest,GCHAT_WEBHOOK_DALLAS=GCHAT_WEBHOOK_DALLAS:latest,GCHAT_WEBHOOK_FAIRVIEW=GCHAT_WEBHOOK_FAIRVIEW:latest,GCHAT_WEBHOOK_ARLINGTON=GCHAT_WEBHOOK_ARLINGTON:latest,GCHAT_WEBHOOK_FALLBACK=GCHAT_WEBHOOK_FALLBACK:latest
+
+
 
       - name: Smoke test staging service
 
+
+
         run: |
+
+
 
           SERVICE_URL="${{ steps.deploy.outputs.url }}"
 
+
+
           for i in {1..10}; do
+
+
 
             STATUS_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" "$SERVICE_URL/health" || true)
 
+
+
             if [ "$STATUS_CODE" = "200" ]; then
+
+
 
               cat /tmp/response.txt
 
+
+
               exit 0
+
+
 
             fi
 
+
+
             sleep 5
+
+
 
           done
 
+
+
           cat /tmp/response.txt
+
+
 
           exit 1
 
+
+
   deploy_production:
+
+
 
     name: Build, Scan, Deploy to Production
 
+
+
     runs-on: ubuntu-latest
+
+
 
     needs:
 
+
+
       - test
+
+
 
       - security
 
+
+
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+
 
     permissions:
 
+
+
       contents: read
+
+
 
       id-token: write
 
+
+
       security-events: write
+
+
 
       actions: read
 
+
+
     environment: production
+
+
 
     env:
 
+
+
       PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+
+
 
       REGION: ${{ vars.GCP_REGION }}
 
+
+
       SERVICE_NAME: ${{ vars.CLOUD_RUN_SERVICE_PRODUCTION }}
+
+
 
       ARTIFACT_REPO: ${{ vars.ARTIFACT_REPO }}
 
+
+
       IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+
+
 
       CLOUDSQL_INSTANCE: ${{ vars.CLOUDSQL_INSTANCE }}
 
+
+
       DATABASE_NAME: ${{ vars.DATABASE_NAME_PRODUCTION }}
+
+
 
       DATABASE_USER: ${{ vars.DATABASE_USER }}
 
+
+
       RUNTIME_SERVICE_ACCOUNT: ${{ vars.CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT }}
+
+
 
       MIGRATION_JOB_NAME: scanx-command-center-migrate-production
 
+
+
       IMAGE_URI: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REPO }}/${{ vars.IMAGE_NAME }}:${{ github.sha }}-production
+
+
 
       LATEST_IMAGE_URI: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REPO }}/${{ vars.IMAGE_NAME }}:production-latest
 
+
+
     steps:
+
+
 
       - name: Checkout
 
+
+
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+
 
       - name: Authenticate to Google Cloud
 
+
+
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
 
+
+
         with:
+
+
 
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
 
+
+
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+
 
       - name: Setup gcloud
 
+
+
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+
+
 
       - name: Configure Docker for Artifact Registry
 
+
+
         run: gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
+
+
 
       - name: Build Docker image
 
+
+
         run: |
 
-          docker build \
 
-            --pull \
 
-            --no-cache \
+          docker build \\
 
-            -t "$IMAGE_URI" \
 
-            -t "$LATEST_IMAGE_URI" \
+
+            --pull \\
+
+
+
+            --no-cache \\
+
+
+
+            -t "$IMAGE_URI" \\
+
+
+
+            -t "$LATEST_IMAGE_URI" \\
+
+
 
             .
 
+
+
       - name: Verify patched Python packages
+
+
 
         run: |
 
-          docker run --rm "$IMAGE_URI" python -c \
+
+
+          docker run --rm "$IMAGE_URI" python -c \\
+
+
 
             "from importlib.metadata import version; print('msgpack:', version('msgpack')); print('setuptools:', version('setuptools'))"
 
+
+
       - name: Scan Docker image
+
+
 
         uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8
 
+
+
         with:
+
+
 
           image-ref: ${{ env.IMAGE_URI }}
 
+
+
           severity: HIGH,CRITICAL
+
+
 
           ignore-unfixed: true
 
+
+
           exit-code: "1"
+
+
 
           format: table
 
+
+
       - name: Push Docker image
 
+
+
         run: |
+
+
 
           docker push "$IMAGE_URI"
 
+
+
           docker push "$LATEST_IMAGE_URI"
+
+
 
       - name: Configure production migration job
 
+
+
         run: |
 
-          gcloud run jobs deploy "$MIGRATION_JOB_NAME" \
 
-            --project="$PROJECT_ID" \
 
-            --region="$REGION" \
+          gcloud run jobs deploy "$MIGRATION_JOB_NAME" \\
 
-            --image="$IMAGE_URI" \
 
-            --service-account="$RUNTIME_SERVICE_ACCOUNT" \
 
-            --set-cloudsql-instances="$CLOUDSQL_INSTANCE" \
+            --project="$PROJECT_ID" \\
 
-            --set-env-vars="APP_ENV=production,DEBUG=false,APP_NAME=scanx-command-center-api,DATABASE_HOST=/cloudsql/$CLOUDSQL_INSTANCE,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER" \
 
-            --set-secrets="DATABASE_PASSWORD=scanx-db-password:latest,JWT_SECRET_KEY=scanx-jwt-secret:latest" \
 
-            --command="alembic" \
+            --region="$REGION" \\
 
-            --args="upgrade,head" \
 
-            --tasks=1 \
 
-            --max-retries=0 \
+            --image="$IMAGE_URI" \\
 
-            --task-timeout=900s \
+
+
+            --service-account="$RUNTIME_SERVICE_ACCOUNT" \\
+
+
+
+            --set-cloudsql-instances="$CLOUDSQL_INSTANCE" \\
+
+
+
+            --set-env-vars="APP_ENV=production,DEBUG=false,APP_NAME=scanx-command-center-api,DATABASE_HOST=/cloudsql/$CLOUDSQL_INSTANCE,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER" \\
+
+
+
+            --set-secrets="DATABASE_PASSWORD=scanx-db-password:latest,JWT_SECRET_KEY=scanx-jwt-secret:latest" \\
+
+
+
+            --command="alembic" \\
+
+
+
+            --args="upgrade,head" \\
+
+
+
+            --tasks=1 \\
+
+
+
+            --max-retries=0 \\
+
+
+
+            --task-timeout=900s \\
+
+
 
             --quiet
 
+
+
       - name: Migrate production database
+
+
 
         run: |
 
-          gcloud run jobs execute "$MIGRATION_JOB_NAME" \
 
-            --project="$PROJECT_ID" \
 
-            --region="$REGION" \
+          gcloud run jobs execute "$MIGRATION_JOB_NAME" \\
+
+
+
+            --project="$PROJECT_ID" \\
+
+
+
+            --region="$REGION" \\
+
+
 
             --wait
 
+
+
       - name: Deploy to Cloud Run Production
+
+
 
         id: deploy
 
+
+
         uses: google-github-actions/deploy-cloudrun@2028e2d7d30a78c6910e0632e48dd561b064884d
+
+
 
         with:
 
+
+
           service: ${{ env.SERVICE_NAME }}
+
+
 
           region: ${{ env.REGION }}
 
+
+
           image: ${{ env.IMAGE_URI }}
+
+
 
           flags: >-
 
+
+
             --allow-unauthenticated
+
+
 
             --port=8080
 
+
+
             --memory=512Mi
+
+
 
             --cpu=1
 
+
+
             --min-instances=0
+
+
 
             --max-instances=3
 
+
+
             --timeout=900
+
+
 
             --service-account=${{ env.RUNTIME_SERVICE_ACCOUNT }}
 
+
+
             --add-cloudsql-instances=${{ env.CLOUDSQL_INSTANCE }}
+
+
 
             --set-env-vars=APP_ENV=production,DEBUG=false,APP_NAME=scanx-command-center-api,DATABASE_HOST=/cloudsql/${{ env.CLOUDSQL_INSTANCE }},DATABASE_NAME=${{ env.DATABASE_NAME }},DATABASE_USER=${{ env.DATABASE_USER }},FRONTEND_BASE_URL=https://scanx-command-center-fe-794794356928.us-central1.run.app
 
+
+
             --set-secrets=DATABASE_PASSWORD=scanx-db-password:latest,JWT_SECRET_KEY=scanx-jwt-secret:latest,PROD_DATABASE_URL=scanx-prod-database-url:latest,ACUITY_USER_ID=ACUITY_USER_ID:latest,ACUITY_API_KEY=ACUITY_API_KEY:latest,ACUITY_CHECKED_IN_LABEL_ID=ACUITY_CHECKED_IN_LABEL_ID:latest,TWILIO_ACCOUNT_SID=TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=TWILIO_AUTH_TOKEN:latest,TWILIO_MESSAGING_SERVICE_SID=TWILIO_MESSAGING_SERVICE_SID:latest,TWILIO_PAYMENT_TEMPLATE_SID=TWILIO_PAYMENT_TEMPLATE_SID:latest,GCHAT_WEBHOOK_DALLAS=GCHAT_WEBHOOK_DALLAS:latest,GCHAT_WEBHOOK_FAIRVIEW=GCHAT_WEBHOOK_FAIRVIEW:latest,GCHAT_WEBHOOK_ARLINGTON=GCHAT_WEBHOOK_ARLINGTON:latest,GCHAT_WEBHOOK_FALLBACK=GCHAT_WEBHOOK_FALLBACK:latest
+
+
 
       - name: Smoke test production service
 
+
+
         run: |
+
+
 
           SERVICE_URL="${{ steps.deploy.outputs.url }}"
 
+
+
           for i in {1..10}; do
+
+
 
             STATUS_CODE=$(curl -s -o /tmp/response.txt -w "%{http_code}" "$SERVICE_URL/health" || true)
 
+
+
             if [ "$STATUS_CODE" = "200" ]; then
+
+
 
               cat /tmp/response.txt
 
+
+
               exit 0
+
+
 
             fi
 
+
+
             sleep 5
+
+
 
           done
 
+
+
           cat /tmp/response.txt
+
+
 
           exit 1
