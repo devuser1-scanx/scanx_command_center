@@ -140,15 +140,15 @@ jobs:
         run: gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
       - name: Build Docker image
         run: |
-          docker build \\
-            --pull \\
-            --no-cache \\
-            -t "$IMAGE_URI" \\
-            -t "$LATEST_IMAGE_URI" \\
+          docker build \
+            --pull \
+            --no-cache \
+            -t "$IMAGE_URI" \
+            -t "$LATEST_IMAGE_URI" \
             .
       - name: Verify patched Python packages
         run: |
-          docker run --rm "$IMAGE_URI" python -c \\
+          docker run --rm "$IMAGE_URI" python -c \
             "from importlib.metadata import version; print('msgpack:', version('msgpack')); print('setuptools:', version('setuptools'))"
       - name: Scan Docker image
         uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8
@@ -164,25 +164,25 @@ jobs:
           docker push "$LATEST_IMAGE_URI"
       - name: Configure staging migration job
         run: |
-          gcloud run jobs deploy "$MIGRATION_JOB_NAME" \\
-            --project="$PROJECT_ID" \\
-            --region="$REGION" \\
-            --image="$IMAGE_URI" \\
-            --service-account="$RUNTIME_SERVICE_ACCOUNT" \\
-            --set-cloudsql-instances="$CLOUDSQL_INSTANCE" \\
-            --set-env-vars="APP_ENV=staging,DEBUG=false,APP_NAME=scanx-command-center-api-staging,DATABASE_HOST=/cloudsql/$CLOUDSQL_INSTANCE,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER" \\
-            --set-secrets="DATABASE_PASSWORD=scanx-staging-db-password:latest,JWT_SECRET_KEY=scanx-staging-jwt-secret:latest,INITIAL_ADMIN_PASSWORD=scanx-staging-initial-admin-password:latest" \\
-            --command="alembic" \\
-            --args="upgrade,head" \\
-            --tasks=1 \\
-            --max-retries=0 \\
-            --task-timeout=900s \\
+          gcloud run jobs deploy "$MIGRATION_JOB_NAME" \
+            --project="$PROJECT_ID" \
+            --region="$REGION" \
+            --image="$IMAGE_URI" \
+            --service-account="$RUNTIME_SERVICE_ACCOUNT" \
+            --set-cloudsql-instances="$CLOUDSQL_INSTANCE" \
+            --set-env-vars="APP_ENV=staging,DEBUG=false,APP_NAME=scanx-command-center-api-staging,DATABASE_HOST=/cloudsql/$CLOUDSQL_INSTANCE,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER" \
+            --set-secrets="DATABASE_PASSWORD=scanx-staging-db-password:latest,JWT_SECRET_KEY=scanx-staging-jwt-secret:latest,INITIAL_ADMIN_PASSWORD=scanx-staging-initial-admin-password:latest" \
+            --command="alembic" \
+            --args="upgrade,head" \
+            --tasks=1 \
+            --max-retries=0 \
+            --task-timeout=900s \
             --quiet
       - name: Migrate staging database
         run: |
-          gcloud run jobs execute "$MIGRATION_JOB_NAME" \\
-            --project="$PROJECT_ID" \\
-            --region="$REGION" \\
+          gcloud run jobs execute "$MIGRATION_JOB_NAME" \
+            --project="$PROJECT_ID" \
+            --region="$REGION" \
             --wait
       - name: Deploy to Cloud Run Staging
         id: deploy
@@ -256,15 +256,15 @@ jobs:
         run: gcloud auth configure-docker $REGION-docker.pkg.dev --quiet
       - name: Build Docker image
         run: |
-          docker build \\
-            --pull \\
-            --no-cache \\
-            -t "$IMAGE_URI" \\
-            -t "$LATEST_IMAGE_URI" \\
+          docker build \
+            --pull \
+            --no-cache \
+            -t "$IMAGE_URI" \
+            -t "$LATEST_IMAGE_URI" \
             .
       - name: Verify patched Python packages
         run: |
-          docker run --rm "$IMAGE_URI" python -c \\
+          docker run --rm "$IMAGE_URI" python -c \
             "from importlib.metadata import version; print('msgpack:', version('msgpack')); print('setuptools:', version('setuptools'))"
       - name: Scan Docker image
         uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8
@@ -280,25 +280,25 @@ jobs:
           docker push "$LATEST_IMAGE_URI"
       - name: Configure production migration job
         run: |
-          gcloud run jobs deploy "$MIGRATION_JOB_NAME" \\
-            --project="$PROJECT_ID" \\
-            --region="$REGION" \\
-            --image="$IMAGE_URI" \\
-            --service-account="$RUNTIME_SERVICE_ACCOUNT" \\
-            --set-cloudsql-instances="$CLOUDSQL_INSTANCE" \\
-            --set-env-vars="APP_ENV=production,DEBUG=false,APP_NAME=scanx-command-center-api,DATABASE_HOST=/cloudsql/$CLOUDSQL_INSTANCE,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER" \\
-            --set-secrets="DATABASE_PASSWORD=scanx-db-password:latest,JWT_SECRET_KEY=scanx-jwt-secret:latest" \\
-            --command="alembic" \\
-            --args="upgrade,head" \\
-            --tasks=1 \\
-            --max-retries=0 \\
-            --task-timeout=900s \\
+          gcloud run jobs deploy "$MIGRATION_JOB_NAME" \
+            --project="$PROJECT_ID" \
+            --region="$REGION" \
+            --image="$IMAGE_URI" \
+            --service-account="$RUNTIME_SERVICE_ACCOUNT" \
+            --set-cloudsql-instances="$CLOUDSQL_INSTANCE" \
+            --set-env-vars="APP_ENV=production,DEBUG=false,APP_NAME=scanx-command-center-api,DATABASE_HOST=/cloudsql/$CLOUDSQL_INSTANCE,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER" \
+            --set-secrets="DATABASE_PASSWORD=scanx-db-password:latest,JWT_SECRET_KEY=scanx-jwt-secret:latest" \
+            --command="alembic" \
+            --args="upgrade,head" \
+            --tasks=1 \
+            --max-retries=0 \
+            --task-timeout=900s \
             --quiet
       - name: Migrate production database
         run: |
-          gcloud run jobs execute "$MIGRATION_JOB_NAME" \\
-            --project="$PROJECT_ID" \\
-            --region="$REGION" \\
+          gcloud run jobs execute "$MIGRATION_JOB_NAME" \
+            --project="$PROJECT_ID" \
+            --region="$REGION" \
             --wait
       - name: Deploy to Cloud Run Production
         id: deploy
