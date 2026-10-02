@@ -145,18 +145,12 @@ def manual_check_in_appointment(
 
     Those operations belong to the service/integration layers.
 
-    The appointment row is locked using SELECT ... FOR UPDATE so two concurrent
-    manual-check-in requests cannot both transition the appointment from
-    unchecked to checked-in and subsequently trigger duplicate external side
-    effects.
+    The appointment row is locked using SELECT ... FOR UPDATE. There is no
+    already-checked-in guard: every call rewrites the check-in values.
 
     Returns:
         None:
             No appointment exists for the supplied appointment_id.
-
-        ManualCheckInWriteResult(already_checked_in=True):
-            The appointment was already checked in. No production values are
-            changed.
 
         ManualCheckInWriteResult(already_checked_in=False):
             The appointment and checkins rows were updated using one identical
@@ -169,24 +163,6 @@ def manual_check_in_appointment(
 
     if appointment is None:
         return None
-
-    if appointment.checkin is True:
-        existing_checkin = prod_db.execute(
-            select(Checkin).where(Checkin.appointment_id == appointment_id)
-        ).scalar_one_or_none()
-
-        existing_checked_in_at = (
-            appointment.checked_in_at
-            or (existing_checkin.checkin_time if existing_checkin is not None else None)
-            or _utc_now_naive()
-        )
-
-        return ManualCheckInWriteResult(
-            appointment=appointment,
-            checkin=existing_checkin,
-            checked_in_at=existing_checked_in_at,
-            already_checked_in=True,
-        )
 
     timestamp = checked_in_at or _utc_now_naive()
 

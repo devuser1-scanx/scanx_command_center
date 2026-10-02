@@ -136,9 +136,7 @@ def _commit_manual_checkin(
 
             )
 
-        if not result.already_checked_in:
-
-            prod_db.commit()
+        prod_db.commit()
 
         return result
 
@@ -885,40 +883,6 @@ def manual_check_in_patient(
         location=location,
 
     )
-
-    if write_result.already_checked_in:
-
-        return ManualCheckInResponse(
-
-            success=True,
-
-            message=("Patient is already checked in."),
-
-            appointment_id=appointment_id,
-
-            checked_in=True,
-
-            checked_in_at=_as_utc_aware(write_result.checked_in_at),
-
-            already_checked_in=True,
-
-            integrations=(
-
-                ManualCheckInIntegrationStatuses(
-
-                    audit=("skipped_already_checked_in"),
-
-                    acuity=("skipped_already_checked_in"),
-
-                    google_chat=("skipped_already_checked_in"),
-
-                    payment_reminder_rcs=("skipped_already_checked_in"),
-
-                )
-
-            ),
-
-        )
 
     appointment = write_result.appointment
 
