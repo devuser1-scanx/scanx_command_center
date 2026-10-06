@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from html import escape
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -120,6 +121,93 @@ def _format_local_time(
     return local.strftime("%I:%M %p").lstrip("0")
 
 
+def _show_admit_button(
+    data: PatientCheckedInCardData,
+) -> bool:
+    """
+    "Admit patient" is shown only for appointments outside normal hours:
+    weekends, 8:30 AM or earlier, Dallas at/after 5:30 PM, and Fairview
+    at/after 6:00 PM. Evaluated in the clinic's local time.
+    """
+    if data.appointment_datetime is None:
+        return False
+
+    timezone = ZoneInfo(data.clinic_timezone or "America/Chicago")
+    value = data.appointment_datetime
+
+    local = (
+        value.replace(tzinfo=timezone)
+        if value.tzinfo is None
+        else value.astimezone(timezone)
+    )
+
+    total_minutes = local.hour * 60 + local.minute
+
+    is_weekend = local.weekday() >= 5
+    is_before_8_30 = total_minutes <= 8 * 60 + 30
+    is_dallas_after_5_30 = data.clinic_id == 1 and total_minutes >= 17 * 60 + 30
+    is_fairview_after_6 = data.clinic_id == 2 and total_minutes >= 18 * 60
+
+    return is_weekend or is_before_8_30 or is_dallas_after_5_30 or is_fairview_after_6
+
+
+def _button_list(
+    data: PatientCheckedInCardData,
+) -> dict:
+    base_url = settings.n8n_webhook_base_url.rstrip("/")
+    appointment_id = quote(data.appointment_id, safe="")
+
+    admit_url = f"{base_url}/allow-entry?appointment_id={appointment_id}"
+    ask_to_wait_url = (
+        f"{base_url}/ask-to-wait"
+        f"?phone={quote(data.phone or '', safe='')}"
+        f"&name={quote(data.first_name or '', safe='')}"
+        f"&appointment_id={appointment_id}"
+    )
+
+    buttons: list[dict] = []
+
+    if _show_admit_button(data):
+        buttons.append(
+            {
+                "text": "Admit patient",
+                "onClick": {
+                    "openLink": {
+                        "url": admit_url,
+                        "openAs": "FULL_SIZE",
+                        "onClose": "NOTHING",
+                    }
+                },
+            }
+        )
+
+    buttons.append(
+        {
+            "text": "Ask to wait",
+            "onClick": {"openLink": {"url": ask_to_wait_url}},
+        }
+    )
+
+    call_url = (
+        "https://scanx-voice-calling-794794356928.us-central1.run.app/call-page"
+        f"?appointmentId={appointment_id}&token=ScanX50"
+    )
+    buttons.append(
+        {
+            "text": "📞 Call Patient",
+            "onClick": {
+                "openLink": {
+                    "url": call_url,
+                    "openAs": "FULL_SIZE",
+                    "onClose": "NOTHING",
+                }
+            },
+        }
+    )
+
+    return {"buttonList": {"buttons": buttons}}
+
+
 def _form_status_html(
     statuses: tuple[
         FormStatusForChat,
@@ -213,6 +301,7 @@ def _build_card(
             }
         },
         {"textParagraph": {"text": (f"<b>Previous Report:</b> {previous_report_display}")}},
+        _button_list(data),
     ]
 
     return {

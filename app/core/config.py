@@ -89,6 +89,11 @@ class Settings(BaseSettings):
     gchat_webhook_fairview: str | None = None
     gchat_webhook_fallback: str | None = None
 
+    # Google Chat card buttons.
+    #
+    # n8n webhooks behind "Admit patient" / "Ask to wait".
+    n8n_webhook_base_url: str = "https://n8n-794794356928.us-central1.run.app/webhook"
+
     jotform_api_key: str | None = None
 
     @property
