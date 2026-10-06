@@ -11,6 +11,8 @@ class FakeAppointment:
     canceled: bool | None = None
     status_label: str | None = None
     token_used: bool | None = None
+    checkin: bool | None = None
+    checked_in_at: datetime | None = None
     confirmed: bool | None = None
     prep_ack: bool | None = None
     paid: bool | None = None
@@ -59,6 +61,21 @@ def test_checked_in_via_status_label_fallback() -> None:
     appointment = FakeAppointment(status_label="Checked In")
 
     assert derive_status_and_tone(appointment) == ("Checked In", "green")
+
+
+def test_checked_in_via_manual_checkin_fields() -> None:
+    appointment = FakeAppointment(
+        checkin=True,
+        checked_in_at=datetime.now(UTC),
+    )
+
+    assert derive_status_and_tone(appointment) == ("Checked In", "green")
+
+
+def test_checkin_flag_without_checked_in_at_is_not_treated_as_checked_in() -> None:
+    appointment = FakeAppointment(checkin=True, checked_in_at=None)
+
+    assert derive_status_and_tone(appointment) == ("Scheduled", "blue")
 
 
 def test_confirmed_status_label_with_prep_ack_true_is_confirmed() -> None:
@@ -161,6 +178,17 @@ def test_is_late_false_when_checked_in() -> None:
     )
 
     assert is_late(appointment, now_utc=datetime.now(UTC)) is False
+
+
+def test_is_late_false_when_manually_checked_in() -> None:
+    now = datetime.now(UTC)
+    appointment = FakeAppointment(
+        checkin=True,
+        checked_in_at=now - timedelta(minutes=15),
+        appointment_datetime=now - timedelta(hours=1),
+    )
+
+    assert is_late(appointment, now_utc=now) is False
 
 
 def test_is_late_false_when_completed_or_no_show() -> None:

@@ -16,14 +16,26 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.prod_base import ProdBase
 
 """
-Read-only models mapped onto tables that already exist in the production
-ScanX database. Only the columns this feature actually reads are mapped -
-the real tables have more columns than are declared here, which is fine for
-read-only access and keeps this file scoped to what Command Center uses.
+Models mapped onto tables that already exist in the production ScanX database.
 
-These models are NEVER created/altered/dropped by Command Center. They are
-mapped against `ProdBase`, a declarative base Alembic's migrations never see
-(see app/db/prod_base.py), and every query against them must be SELECT-only.
+Only the columns Command Center currently needs are mapped. The real production
+tables may contain additional columns, which is valid because Command Center
+does not manage the production schema.
+
+These models are NEVER created, altered, or dropped by Command Center.
+They are mapped against ProdBase, a declarative base that Command Center's
+Alembic migrations do not manage (see app/db/prod_base.py).
+
+Production access is read-only by default. A very small number of explicitly
+approved write operations are isolated in app/repositories/production_writes.py:
+
+1. Record outbound SMS messages in the existing `messages` table.
+2. Record sent forms in the existing `form_tracking` table.
+3. Record a Command Center manual patient check-in by updating the existing
+   `appointment` row and upserting the existing `checkins` row.
+
+No other production writes should be added outside that repository without
+an explicit architectural decision.
 """
 
 
@@ -64,6 +76,10 @@ class Appointment(ProdBase):
     status_label: Mapped[str | None] = mapped_column(String(50), nullable=True)
     confirmed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     checkin: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    checked_in_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=False),
+        nullable=True,
+    )
     token_used: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     canceled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     prep_ack: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
@@ -71,7 +87,13 @@ class Appointment(ProdBase):
     clinic_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     appointment_datetime: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=False),
+        nullable=True,
     )
 
 
@@ -110,7 +132,10 @@ class Checkin(ProdBase):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     appointment_id: Mapped[str] = mapped_column(String(50), nullable=False)
 
-    checkin_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    checkin_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=False),
+        nullable=True,
+    )
     location: Mapped[str | None] = mapped_column(String(100), nullable=True)
     status: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
@@ -122,7 +147,10 @@ class FormStatus(ProdBase):
     appointment_id: Mapped[str] = mapped_column(String, nullable=False)
     patient_name: Mapped[str | None] = mapped_column(String, nullable=True)
     sent_status: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
-    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=False),
+        nullable=True,
+    )
 
 
 class FormTracking(ProdBase):
@@ -136,8 +164,14 @@ class FormTracking(ProdBase):
     appointment_type: Mapped[str | None] = mapped_column(Text, nullable=True)
     form_type: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False)
-    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    submitted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
 
 class Message(ProdBase):
@@ -152,7 +186,10 @@ class Message(ProdBase):
     status: Mapped[str | None] = mapped_column(String(30), nullable=True)
     sender: Mapped[str | None] = mapped_column(String(50), nullable=True)
     recipient: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    timestamp: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    timestamp: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=False),
+        nullable=True,
+    )
 
 
 class CallLog(ProdBase):
@@ -163,7 +200,10 @@ class CallLog(ProdBase):
     direction: Mapped[str] = mapped_column(String(20), nullable=False)
     status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     duration: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=False),
+        nullable=True,
+    )
 
 
 class Report(ProdBase):
@@ -174,10 +214,14 @@ class Report(ProdBase):
     file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     delivery_link: Mapped[str | None] = mapped_column(String(255), nullable=True)
     link_expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=False), nullable=True
+        DateTime(timezone=False),
+        nullable=True,
     )
     accessed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
-    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=False),
+        nullable=True,
+    )
 
 
 class Upload(ProdBase):
@@ -187,5 +231,8 @@ class Upload(ProdBase):
     appointment_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
     file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     file_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    uploaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
+    uploaded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=False),
+        nullable=True,
+    )
     verified: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
