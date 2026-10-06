@@ -41,7 +41,7 @@ def make_data(
 
 
 def buttons(data: PatientCheckedInCardData) -> list[dict]:
-    widgets = _build_card(data)["cardsV2"][0]["card"]["sections"][0]["widgets"]
+    widgets = _build_card(data)["cardsV2"][0]["card"]["sections"][1]["widgets"]
     return widgets[-1]["buttonList"]["buttons"]
 
 
@@ -136,8 +136,18 @@ def test_buttons_handle_missing_phone_and_name() -> None:
 
 
 def test_buttons_are_the_last_widget_after_the_details() -> None:
-    widgets = _build_card(make_data())["cardsV2"][0]["card"]["sections"][0]["widgets"]
+    widgets = _build_card(make_data())["cardsV2"][0]["card"]["sections"][1]["widgets"]
 
     assert "buttonList" in widgets[-1]
     assert all("textParagraph" in w for w in widgets[:-1])
     assert "Previous Report" in widgets[-2]["textParagraph"]["text"]
+
+
+def test_card_header_and_highlight_mark_the_check_in_as_manual() -> None:
+    card = _build_card(make_data())["cardsV2"][0]["card"]
+
+    assert card["header"]["title"] == "✅ Patient Checked In (Manual)"
+
+    highlight = card["sections"][0]["widgets"][0]["textParagraph"]["text"]
+    assert "MANUAL CHECK-IN" in highlight
+    assert highlight.startswith("<b><font color=")

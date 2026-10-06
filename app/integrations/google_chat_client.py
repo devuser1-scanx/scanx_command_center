@@ -310,13 +310,27 @@ def _build_card(
                 "cardId": "appointment_card",
                 "card": {
                     "header": {
-                        "title": ("✅ Patient Checked In"),
+                        "title": ("✅ Patient Checked In (Manual)"),
                         "subtitle": ("Find patient details below"),
                     },
                     "sections": [
+                        # Card headers are plain text, so the highlight lives
+                        # in its own section above the detail widgets.
+                        {
+                            "widgets": [
+                                {
+                                    "textParagraph": {
+                                        "text": (
+                                            '<b><font color="#1a73e8">'
+                                            "MANUAL CHECK-IN</font></b>"
+                                        )
+                                    }
+                                }
+                            ],
+                        },
                         {
                             "widgets": widgets,
-                        }
+                        },
                     ],
                 },
             }
