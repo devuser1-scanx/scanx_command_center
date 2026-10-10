@@ -18,16 +18,18 @@ def make_data(
     appointment_id: str = "APPT1",
     first_name: str | None = "Jane",
     phone: str | None = "+15551234567",
+    exam_type: str | None = "Ultrasound",
+    last_name: str | None = "Doe",
 ) -> PatientCheckedInCardData:
     return PatientCheckedInCardData(
         clinic_id=clinic_id,
         clinic_timezone="America/Chicago",
-        last_name="Doe",
+        last_name=last_name,
         first_name=first_name,
         appointment_id=appointment_id,
         gender=None,
         dob=None,
-        exam_type="Ultrasound",
+        exam_type=exam_type,
         reason=None,
         reason_other=None,
         physician_name=None,
@@ -151,3 +153,47 @@ def test_card_header_and_highlight_mark_the_check_in_as_manual() -> None:
     highlight = card["sections"][0]["widgets"][0]["textParagraph"]["text"]
     assert "MANUAL CHECK-IN" in highlight
     assert highlight.startswith("<b><font color=")
+
+
+def detail_texts(data: PatientCheckedInCardData) -> list[str]:
+    widgets = _build_card(data)["cardsV2"][0]["card"]["sections"][1]["widgets"]
+    return [w["textParagraph"]["text"] for w in widgets if "textParagraph" in w]
+
+
+def test_fibroscan_exam_shows_report_file_name_after_previous_report() -> None:
+    texts = detail_texts(
+        make_data(
+            exam_type="FibroScan / Liver Elastography",
+            first_name="Evelyn",
+            last_name="Baker",
+            appointment_id="1781119705",
+        )
+    )
+
+    assert texts[-1] == "<b>Report File Name:</b> EVELYN_BAKER_1781119705"
+    assert "Previous Report" in texts[-2]
+
+
+def test_fibroscan_match_is_a_substring_of_the_exam_type() -> None:
+    texts = detail_texts(make_data(exam_type="FibroScan / Liver Elastography (30 min)"))
+
+    assert "Report File Name" in texts[-1]
+
+
+@pytest.mark.parametrize("exam_type", ["Ultrasound", "", None])
+def test_other_exams_do_not_show_report_file_name(exam_type: str | None) -> None:
+    assert not any("Report File Name" in t for t in detail_texts(make_data(exam_type=exam_type)))
+
+
+def test_report_file_name_tolerates_missing_names() -> None:
+    texts = detail_texts(
+        make_data(exam_type="FibroScan / Liver Elastography", first_name=None, last_name=None)
+    )
+
+    assert texts[-1] == "<b>Report File Name:</b> __APPT1"
+
+
+def test_buttons_still_come_after_the_report_file_name() -> None:
+    result = buttons(make_data(exam_type="FibroScan / Liver Elastography"))
+
+    assert [b["text"] for b in result][-1] == "📞 Call Patient"

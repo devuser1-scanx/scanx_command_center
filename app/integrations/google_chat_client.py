@@ -208,6 +208,25 @@ def _button_list(
     return {"buttonList": {"buttons": buttons}}
 
 
+FIBROSCAN_EXAM_TYPE = "FibroScan / Liver Elastography"
+
+
+def _fibroscan_report_file_name(
+    data: PatientCheckedInCardData,
+) -> str | None:
+    """
+    FibroScan / Liver Elastography exams get a "Report File Name" line:
+    FIRSTNAME_LASTNAME_APPOINTMENTID, with the names upper-cased.
+    """
+    if not data.exam_type or FIBROSCAN_EXAM_TYPE not in data.exam_type:
+        return None
+
+    first_name = (data.first_name or "").upper()
+    last_name = (data.last_name or "").upper()
+
+    return f"{first_name}_{last_name}_{data.appointment_id}"
+
+
 def _form_status_html(
     statuses: tuple[
         FormStatusForChat,
@@ -301,8 +320,16 @@ def _build_card(
             }
         },
         {"textParagraph": {"text": (f"<b>Previous Report:</b> {previous_report_display}")}},
-        _button_list(data),
     ]
+
+    report_file_name = _fibroscan_report_file_name(data)
+
+    if report_file_name:
+        widgets.append(
+            {"textParagraph": {"text": (f"<b>Report File Name:</b> {escape(report_file_name)}")}}
+        )
+
+    widgets.append(_button_list(data))
 
     return {
         "cardsV2": [
