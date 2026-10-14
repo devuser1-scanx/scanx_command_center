@@ -67,8 +67,7 @@ def test_repository_returns_none_when_appointment_missing() -> None:
     db = FakeProdDb(None)
 
     assert (
-        production_writes.manual_check_in_appointment(db, appointment_id="X", location=None)
-        is None
+        production_writes.manual_check_in_appointment(db, appointment_id="X", location=None) is None
     )
 
 

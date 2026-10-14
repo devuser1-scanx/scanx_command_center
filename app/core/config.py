@@ -96,6 +96,25 @@ class Settings(BaseSettings):
 
     jotform_api_key: str | None = None
 
+    # Fax Portal: WestFax Comprehend webhook.
+    #
+    # The webhook is public, so it fails closed: with no token configured
+    # every delivery is rejected. Accepted as "Authorization: Bearer <token>",
+    # "X-Api-Key: <token>" or "?token=" (prefer a header - query strings end
+    # up in request logs). Both values belong in Secret Manager.
+    comprehend_webhook_token: str | None = None
+    # Optional: the connector's HMAC-SHA256 secret. When set, a valid
+    # signature header is required in addition to the token.
+    comprehend_webhook_hmac_secret: str | None = None
+    comprehend_webhook_max_body_bytes: int = 10 * 1024 * 1024
+
+    # Private bucket the Comprehend GCS connector writes the fax PDFs to. Never
+    # public: PDFs reach the browser only through an authenticated backend
+    # endpoint. The service account running the API needs read access to it.
+    # The connector's file path template must start with {JobId}/ (see
+    # app/integrations/gcs_faxes.py).
+    comprehend_gcs_bucket: str = "westfax_comprehend_fax_pdfs"
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]

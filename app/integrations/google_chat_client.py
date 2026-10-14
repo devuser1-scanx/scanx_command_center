@@ -63,23 +63,17 @@ def _webhook_for_clinic(
 ) -> str:
     if clinic_id == 1:
         if not settings.gchat_webhook_dallas:
-            raise RuntimeError(
-                "Google Chat webhook is not configured for Dallas."
-            )
+            raise RuntimeError("Google Chat webhook is not configured for Dallas.")
 
         return settings.gchat_webhook_dallas
 
     if clinic_id == 2:
         if not settings.gchat_webhook_fairview:
-            raise RuntimeError(
-                "Google Chat webhook is not configured for Fairview."
-            )
+            raise RuntimeError("Google Chat webhook is not configured for Fairview.")
 
         return settings.gchat_webhook_fairview
 
-    raise RuntimeError(
-        f"No Google Chat routing is configured for clinic_id={clinic_id}."
-    )
+    raise RuntimeError(f"No Google Chat routing is configured for clinic_id={clinic_id}.")
 
 
 def _display(
@@ -108,11 +102,7 @@ def _format_local_time(
     timezone = ZoneInfo(timezone_name or "America/Chicago")
 
     if value.tzinfo is None:
-        source = (
-            value.replace(tzinfo=UTC)
-            if naive_is_utc
-            else value.replace(tzinfo=timezone)
-        )
+        source = value.replace(tzinfo=UTC) if naive_is_utc else value.replace(tzinfo=timezone)
     else:
         source = value
 
@@ -135,11 +125,7 @@ def _show_admit_button(
     timezone = ZoneInfo(data.clinic_timezone or "America/Chicago")
     value = data.appointment_datetime
 
-    local = (
-        value.replace(tzinfo=timezone)
-        if value.tzinfo is None
-        else value.astimezone(timezone)
-    )
+    local = value.replace(tzinfo=timezone) if value.tzinfo is None else value.astimezone(timezone)
 
     total_minutes = local.hour * 60 + local.minute
 
@@ -255,11 +241,7 @@ def _form_status_html(
 def _build_card(
     data: PatientCheckedInCardData,
 ) -> dict:
-    paid_display = (
-    "true"
-    if data.paid is True
-    else '<font color="#d93025">false</font>'
-)
+    paid_display = "true" if data.paid is True else '<font color="#d93025">false</font>'
 
     if data.previous_report_url:
         previous_report_display = (
@@ -348,8 +330,7 @@ def _build_card(
                                 {
                                     "textParagraph": {
                                         "text": (
-                                            '<b><font color="#1a73e8">'
-                                            "MANUAL CHECK-IN</font></b>"
+                                            '<b><font color="#1a73e8">MANUAL CHECK-IN</font></b>'
                                         )
                                     }
                                 }

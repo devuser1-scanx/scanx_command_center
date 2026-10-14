@@ -31,9 +31,7 @@ def create_short_url(*, gcs_blob_name: str) -> str:
                 },
             )
     except httpx.HTTPError as exc:
-        raise PdfProxyApiError(
-            f"Could not reach the report link service: {exc}"
-        ) from exc
+        raise PdfProxyApiError(f"Could not reach the report link service: {exc}") from exc
 
     if response.status_code >= 400:
         try:
@@ -45,9 +43,7 @@ def create_short_url(*, gcs_blob_name: str) -> str:
         except ValueError:
             error_message = response.text
 
-        raise PdfProxyApiError(
-            error_message
-        )
+        raise PdfProxyApiError(error_message)
 
     try:
         payload = response.json()
@@ -56,14 +52,10 @@ def create_short_url(*, gcs_blob_name: str) -> str:
             "The report link service returned an invalid JSON response."
         ) from exc
 
-    short_url = payload.get(
-        "shortUrl"
-    )
+    short_url = payload.get("shortUrl")
 
     if not short_url:
-        raise PdfProxyApiError(
-            "The report link service did not return a shortUrl."
-        )
+        raise PdfProxyApiError("The report link service did not return a shortUrl.")
 
     return str(short_url)
 
@@ -80,10 +72,7 @@ def lookup_previous_report_link(
 
     Returns None when the service reports that no previous report was found.
     """
-    url = (
-        f"{settings.pdf_proxy_base_url.rstrip('/')}"
-        "/api/lookup-previous-report"
-    )
+    url = f"{settings.pdf_proxy_base_url.rstrip('/')}/api/lookup-previous-report"
 
     try:
         with httpx.Client(
@@ -99,24 +88,16 @@ def lookup_previous_report_link(
             )
 
     except httpx.HTTPError as exc:
-        raise PdfProxyApiError(
-            f"Could not reach the report link service: {exc}"
-        ) from exc
+        raise PdfProxyApiError(f"Could not reach the report link service: {exc}") from exc
 
     if response.status_code >= 400:
         try:
             payload = response.json()
-            error_message = (
-                payload.get("error")
-                or payload.get("message")
-                or response.text
-            )
+            error_message = payload.get("error") or payload.get("message") or response.text
         except ValueError:
             error_message = response.text
 
-        raise PdfProxyApiError(
-            str(error_message)
-        )
+        raise PdfProxyApiError(str(error_message))
 
     try:
         payload = response.json()
@@ -128,12 +109,6 @@ def lookup_previous_report_link(
     if not payload.get("found"):
         return None
 
-    short_url = payload.get(
-        "shortUrl"
-    )
+    short_url = payload.get("shortUrl")
 
-    return (
-        str(short_url)
-        if short_url
-        else None
-    )
+    return str(short_url) if short_url else None

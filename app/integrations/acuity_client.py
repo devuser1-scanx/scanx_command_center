@@ -147,3 +147,41 @@ def update_checked_in_label(
         raise AcuityApiError(f"Could not reach Acuity: {exc}") from exc
 
     _raise_for_acuity_error(response)
+
+
+def _get_json_list(path: str) -> list[dict[str, Any]]:
+    """GET a list endpoint from Acuity (server-side only; the API key never
+    leaves the backend)."""
+    user_id, api_key = _require_acuity_credentials()
+
+    try:
+        with httpx.Client(
+            timeout=ACUITY_REQUEST_TIMEOUT_SECONDS,
+            auth=(user_id, api_key),
+        ) as client:
+            response = client.get(f"{ACUITY_API_BASE}{path}")
+
+    except httpx.HTTPError as exc:
+        raise AcuityApiError(f"Could not reach Acuity: {exc}") from exc
+
+    _raise_for_acuity_error(response)
+
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise AcuityApiError("Acuity returned an invalid JSON response.") from exc
+
+    if not isinstance(payload, list):
+        raise AcuityApiError("Acuity returned an unexpected response shape.")
+
+    return [item for item in payload if isinstance(item, dict)]
+
+
+def list_calendars() -> list[dict[str, Any]]:
+    """GET /calendars: the clinics (Acuity calendars)."""
+    return _get_json_list("/calendars")
+
+
+def list_appointment_types() -> list[dict[str, Any]]:
+    """GET /appointment-types: the exams, with the calendarIDs that offer each."""
+    return _get_json_list("/appointment-types")

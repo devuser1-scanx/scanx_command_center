@@ -4,6 +4,9 @@ from app.api.v1.routes import (
     auth,
     clinics,
     dashboard,
+    fax_portal,
+    fax_portal_intake,
+    fax_portal_webhooks,
     health,
     patients,
     reports,
@@ -57,4 +60,19 @@ api_router.include_router(
 api_router.include_router(
     roles.router,
     tags=["roles"],
+)
+
+api_router.include_router(
+    fax_portal_webhooks.router,
+    tags=["fax portal"],
+)
+
+api_router.include_router(
+    fax_portal.router,
+    tags=["fax portal"],
+)
+
+api_router.include_router(
+    fax_portal_intake.router,
+    tags=["fax portal"],
 )

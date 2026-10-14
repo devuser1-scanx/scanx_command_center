@@ -56,12 +56,9 @@ def derive_status_and_tone(appointment: Appointment) -> tuple[str, Tone]:
         return "Completed", "pink"
 
     if (
-    appointment.token_used
-    or (
-        appointment.checkin
-        and appointment.checked_in_at is not None
-    )
-    or status_label == "Checked In"
+        appointment.token_used
+        or (appointment.checkin and appointment.checked_in_at is not None)
+        or status_label == "Checked In"
     ):
         return "Checked In", "green"
 
@@ -161,13 +158,7 @@ def is_late(appointment: Appointment, *, now_utc: datetime) -> bool:
     if appointment.canceled:
         return False
 
-    if (
-    appointment.token_used
-    or (
-        appointment.checkin
-        and appointment.checked_in_at is not None
-    )
-    ):
+    if appointment.token_used or (appointment.checkin and appointment.checked_in_at is not None):
         return False
 
     status_label = (appointment.status_label or "").strip()
