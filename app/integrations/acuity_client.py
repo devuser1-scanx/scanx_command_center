@@ -182,6 +182,12 @@ def list_calendars() -> list[dict[str, Any]]:
     return _get_json_list("/calendars")
 
 
+def list_forms() -> list[dict[str, Any]]:
+    """GET /forms: the intake forms, each with its fields (ids, labels, dropdown
+    options) and the appointment types it is attached to."""
+    return _get_json_list("/forms")
+
+
 def list_appointment_types() -> list[dict[str, Any]]:
     """GET /appointment-types: the exams, with the calendarIDs that offer each."""
     return _get_json_list("/appointment-types")

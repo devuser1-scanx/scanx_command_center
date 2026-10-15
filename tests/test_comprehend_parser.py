@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from app.core.phone import normalize_e164
+from app.core.phone import format_phone, normalize_e164
 from app.services.comprehend_parser import (
     parse_payload,
     pick_referrer,
@@ -53,6 +53,42 @@ def sample() -> dict[str, Any]:
 )
 def test_normalize_e164(raw: str | None, expected: str | None) -> None:
     assert normalize_e164(raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("(214) 555-0187", "+12145550187"),
+        (" 214.555.0187 ", "+12145550187"),
+        ("1 (214) 555-0187", "+12145550187"),
+        ("+12145550187", "+12145550187"),
+        # What cannot be normalised is kept as written, not lost.
+        ("(214) 648-3XXX", "(214) 648-3XXX"),
+        ("XXX-XXX-XXXX", "XXX-XXX-XXXX"),
+        ("555-0187", "555-0187"),
+        ("", None),
+        ("   ", None),
+        (None, None),
+    ],
+)
+def test_format_phone_stores_plus_one_and_ten_digits_when_valid(
+    raw: str | None, expected: str | None
+) -> None:
+    assert format_phone(raw) == expected
+
+
+def test_phones_from_the_webhook_are_stored_as_plus_one_and_ten_digits(
+    sample: dict[str, Any],
+) -> None:
+    payload = json.loads(json.dumps(sample))
+    payload["PHI Phone"][0] = "(214) 555-0187"
+    payload["Phone"][0] = "972-555-0144 x12"
+
+    parsed = parse_payload(payload)
+
+    assert parsed.patients[0]["phone"] == "+12145550187"
+    assert parsed.patients[0]["phone_e164"] == "+12145550187"
+    assert parsed.providers[0]["phone"] == "+19725550144"
 
 
 # ---------------------------------------------------------------------

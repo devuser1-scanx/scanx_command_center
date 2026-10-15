@@ -399,8 +399,36 @@ def test_edits_go_to_the_card_with_an_audit_trail(
     assert entry.changes == {
         "first_name": {"from": "Jon", "to": "John"},
         "dob": {"from": None, "to": "1970-01-31"},
-        "phone": {"from": "214-555-0000", "to": "(214) 555-0187"},
+        "phone": {"from": "214-555-0000", "to": "+12145550187"},
     }
+
+
+def test_typing_a_phone_in_another_format_is_not_an_edit(
+    client: TestClient, db_session: Session, staff: Any
+) -> None:
+    card = intake_card(
+        db_session, first_name="Ann", phone="+12145550187", phone_e164="+12145550187"
+    )
+
+    response = patch(
+        client, auth_headers(client, staff), card.id, row_version=1, phone="(214) 555-0187"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["changed_fields"] == []
+    db_session.refresh(card)
+    assert (card.phone, card.phone_e164, card.row_version) == ("+12145550187", "+12145550187", 1)
+
+
+def test_a_phone_that_cannot_be_normalised_is_kept_as_typed(
+    client: TestClient, db_session: Session, staff: Any
+) -> None:
+    card = intake_card(db_session, first_name="Ann", phone="214-555-0000")
+
+    patch(client, auth_headers(client, staff), card.id, row_version=1, phone="(214) 648-3XXX")
+
+    db_session.refresh(card)
+    assert (card.phone, card.phone_e164) == ("(214) 648-3XXX", None)
 
 
 def test_an_explicit_null_clears_a_field(

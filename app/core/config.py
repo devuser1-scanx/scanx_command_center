@@ -67,6 +67,18 @@ class Settings(BaseSettings):
     twilio_auth_token: str | None = None
     twilio_messaging_service_sid: str | None = None
     twilio_from_number: str | None = None
+    # Voice-capable Twilio number the Fax Portal's click-to-call dials from (the
+    # caller ID the patient sees). An RCS sender cannot place calls.
+    twilio_voice_from_number: str | None = None
+    # Browser calling (Twilio Voice SDK): the staff member talks through the
+    # browser, and Twilio dials the patient from twilio_voice_from_number.
+    # An API key (Twilio Console > Account > API keys) signs the short-lived
+    # token the browser connects with; the TwiML App's Voice URL is
+    # <PUBLIC_API_BASE_URL>/fax-portal/webhooks/twilio/voice/client and its
+    # Status Callback URL <PUBLIC_API_BASE_URL>/fax-portal/webhooks/twilio/voice/status.
+    twilio_api_key_sid: str | None = None
+    twilio_api_key_secret: str | None = None
+    twilio_twiml_app_sid: str | None = None
 
     # Payment-reminder Content Template triggered after successful check-in.
     #
@@ -74,6 +86,12 @@ class Settings(BaseSettings):
     #   1 -> patient first name
     #   2 -> payment link
     twilio_payment_template_sid: str | None = None
+
+    # Public base URL of this API (e.g. https://<service>.run.app), used to tell
+    # Twilio where to post message status callbacks and call instructions, and
+    # to verify their signatures. Unset: texts are still sent, just without
+    # delivery updates, and click-to-call is unavailable.
+    public_api_base_url: str | None = None
 
     # Acuity Scheduling
     acuity_user_id: str | None = None

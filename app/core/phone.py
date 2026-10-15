@@ -41,3 +41,13 @@ def normalize_e164(raw: str | None) -> str | None:
         return None
 
     return f"+1{digits}"
+
+
+def format_phone(raw: str | None) -> str | None:
+    """The value to store in a human-facing phone column: E.164 (+1XXXXXXXXXX)
+    when the number is valid, otherwise the original text, so a masked or
+    partial number stays readable instead of being lost. Never raises."""
+    if not raw or not raw.strip():
+        return None
+
+    return normalize_e164(raw) or raw.strip()

@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
 
-from app.core.phone import normalize_e164
+from app.core.phone import format_phone, normalize_e164
 
 # Pure parsing of a WestFax Comprehend webhook body into column values for the
 # cc_fp_ tables. No database access here, so every quirk is unit-testable.
@@ -328,7 +328,7 @@ def parse_payload(payload: dict[str, Any]) -> ParsedFax:
                 "address": to_str(_at(_array(payload, "PHI Address"), i)),
                 "gender": to_str(_at(_array(payload, "PHI Gender"), i)),
                 "mrn": to_str(_at(_array(payload, "PHI MRN"), i)),
-                "phone": phone,
+                "phone": format_phone(phone),
                 "phone_e164": normalize_e164(phone),
             }
         )
@@ -350,7 +350,7 @@ def parse_payload(payload: dict[str, Any]) -> ParsedFax:
                 "role_legacy": to_str(_at(_array(payload, "Role Legacy String"), i)),
                 "patient_idx": _valid_ref(_at(_array(payload, "patient Index"), i), patient_count),
                 "npi": _npi(_at(_array(payload, "NPI"), i)),
-                "phone": to_str(_at(_array(payload, "Phone"), i)),
+                "phone": format_phone(to_str(_at(_array(payload, "Phone"), i))),
                 "address1": to_str(_at(_array(payload, "Address 1"), i)),
                 "address2": to_str(_at(_array(payload, "Address 2"), i)),
                 "city": to_str(_at(_array(payload, "City"), i)),

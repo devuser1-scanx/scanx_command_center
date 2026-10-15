@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.core.phone import normalize_e164
+from app.core.phone import format_phone, normalize_e164
 from app.integrations import gcs_faxes
 from app.models.auth import CCUser
 from app.models.fax_portal import (
@@ -17,6 +17,7 @@ from app.models.fax_portal import (
     CCFpFaxPatient,
     CCFpReferralBoard,
     CCFpReferralExam,
+    CCFpStatus,
 )
 from app.schemas.fax_portal import (
     AssigneeResponse,
@@ -50,9 +51,10 @@ R = CCFpReferralBoard
 TEXT_FIELDS = (
     "first_name",
     "last_name",
-    "phone",
     "gender",
     "email",
+    "reason",
+    "reason_other",
     "physician_name",
     "physician_fax_no",
     "physician_email",
@@ -376,10 +378,14 @@ def update_intake(
     user: CCUser,
     ip_address: str | None = None,
     user_agent: str | None = None,
+    require_review: bool = True,
 ) -> tuple[R, list[str]]:
-    """Applies a reviewer's corrections to the card (never to the extracted
-    rows). Optimistic lock on row_version; before/after values go to the audit
-    log. Only cards still in Review Required can be edited here.
+    """Applies corrections to the card (never to the extracted rows).
+    Optimistic lock on row_version; before/after values go to the audit log.
+
+    From Intake Review (require_review=True) only cards still in Review
+    Required can be edited. From the Referral Case (require_review=False) any
+    open card can; a closed one must be reopened by a manager first.
     """
     card = db.scalar(select(R).where(R.id == referral_id).with_for_update())
 
@@ -389,8 +395,16 @@ def update_intake(
     if card.row_version != payload.row_version:
         raise RowVersionConflictError("This referral was changed by someone else. Reload it.")
 
-    if card.status != REVIEW:
-        raise InvalidMoveError("Only referrals in Review Required can be edited in Intake Review.")
+    if require_review:
+        if card.status != REVIEW:
+            raise InvalidMoveError(
+                "Only referrals in Review Required can be edited in Intake Review."
+            )
+    else:
+        status_row = db.get(CCFpStatus, card.status)
+
+        if status_row is not None and not status_row.is_open:
+            raise InvalidMoveError("This referral is closed. A manager can reopen it to edit it.")
 
     provided = payload.model_fields_set
     changes: dict[str, dict[str, Any]] = {}
@@ -406,7 +420,13 @@ def update_intake(
             setattr(card, field, new)
 
     if "phone" in provided:
-        card.phone_e164 = normalize_e164(card.phone)
+        # Stored as +1XXXXXXXXXX when valid so the column is uniform; typing the
+        # same number in another format is not an edit.
+        typed = _clean(payload.phone)
+        new_phone = format_phone(typed)
+        record("phone", card.phone, new_phone)
+        card.phone = new_phone
+        card.phone_e164 = normalize_e164(typed)
 
     if "dob" in provided:
         record("dob", card.dob, payload.dob)
@@ -434,7 +454,7 @@ def update_intake(
 
     log_activity(
         db,
-        section="intake_review",
+        section="intake_review" if require_review else "referral_case",
         action="edit_field",
         user_id=user.id,
         referral_id=card.id,
