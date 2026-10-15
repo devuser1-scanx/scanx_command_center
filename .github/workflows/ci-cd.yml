@@ -124,6 +124,7 @@ jobs:
       DATABASE_USER: ${{ vars.DATABASE_USER }}
       RUNTIME_SERVICE_ACCOUNT: ${{ vars.CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT }}
       MIGRATION_JOB_NAME: scanx-command-center-migrate-staging
+      ACUITY_SYNC_JOB_NAME: fax-portal-acuity-sync-staging
       IMAGE_URI: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REPO }}/${{ vars.IMAGE_NAME }}:${{ github.sha }}-staging
       LATEST_IMAGE_URI: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REPO }}/${{ vars.IMAGE_NAME }}:staging-latest
     steps:
@@ -184,6 +185,22 @@ jobs:
             --project="$PROJECT_ID" \
             --region="$REGION" \
             --wait
+      - name: Configure staging Acuity sync job
+        run: |
+          gcloud run jobs deploy "$ACUITY_SYNC_JOB_NAME" \
+            --project="$PROJECT_ID" \
+            --region="$REGION" \
+            --image="$IMAGE_URI" \
+            --service-account="$RUNTIME_SERVICE_ACCOUNT" \
+            --set-cloudsql-instances="$CLOUDSQL_INSTANCE" \
+            --set-env-vars="APP_ENV=staging,DEBUG=false,APP_NAME=scanx-command-center-api-staging,DATABASE_HOST=/cloudsql/$CLOUDSQL_INSTANCE,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER" \
+            --set-secrets="DATABASE_PASSWORD=scanx-staging-db-password:latest,JWT_SECRET_KEY=scanx-staging-jwt-secret:latest,ACUITY_USER_ID=ACUITY_USER_ID:latest,ACUITY_API_KEY=ACUITY_API_KEY:latest" \
+            --command="python" \
+            --args="-m,app.scripts.fax_portal_acuity_sync" \
+            --tasks=1 \
+            --max-retries=0 \
+            --task-timeout=300s \
+            --quiet
       - name: Deploy to Cloud Run Staging
         id: deploy
         uses: google-github-actions/deploy-cloudrun@2028e2d7d30a78c6910e0632e48dd561b064884d
@@ -240,6 +257,7 @@ jobs:
       DATABASE_USER: ${{ vars.DATABASE_USER }}
       RUNTIME_SERVICE_ACCOUNT: ${{ vars.CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT }}
       MIGRATION_JOB_NAME: scanx-command-center-migrate-production
+      ACUITY_SYNC_JOB_NAME: fax-portal-acuity-sync-production
       IMAGE_URI: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REPO }}/${{ vars.IMAGE_NAME }}:${{ github.sha }}-production
       LATEST_IMAGE_URI: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REPO }}/${{ vars.IMAGE_NAME }}:production-latest
     steps:
@@ -300,6 +318,22 @@ jobs:
             --project="$PROJECT_ID" \
             --region="$REGION" \
             --wait
+      - name: Configure production Acuity sync job
+        run: |
+          gcloud run jobs deploy "$ACUITY_SYNC_JOB_NAME" \
+            --project="$PROJECT_ID" \
+            --region="$REGION" \
+            --image="$IMAGE_URI" \
+            --service-account="$RUNTIME_SERVICE_ACCOUNT" \
+            --set-cloudsql-instances="$CLOUDSQL_INSTANCE" \
+            --set-env-vars="APP_ENV=production,DEBUG=false,APP_NAME=scanx-command-center-api,DATABASE_HOST=/cloudsql/$CLOUDSQL_INSTANCE,DATABASE_NAME=$DATABASE_NAME,DATABASE_USER=$DATABASE_USER" \
+            --set-secrets="DATABASE_PASSWORD=scanx-db-password:latest,JWT_SECRET_KEY=scanx-jwt-secret:latest,ACUITY_USER_ID=ACUITY_USER_ID:latest,ACUITY_API_KEY=ACUITY_API_KEY:latest" \
+            --command="python" \
+            --args="-m,app.scripts.fax_portal_acuity_sync" \
+            --tasks=1 \
+            --max-retries=0 \
+            --task-timeout=300s \
+            --quiet
       - name: Deploy to Cloud Run Production
         id: deploy
         uses: google-github-actions/deploy-cloudrun@2028e2d7d30a78c6910e0632e48dd561b064884d
