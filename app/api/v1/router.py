@@ -5,7 +5,9 @@ from app.api.v1.routes import (
     clinics,
     dashboard,
     fax_portal,
+    fax_portal_case,
     fax_portal_intake,
+    fax_portal_twilio_webhooks,
     fax_portal_webhooks,
     health,
     patients,
@@ -74,5 +76,15 @@ api_router.include_router(
 
 api_router.include_router(
     fax_portal_intake.router,
+    tags=["fax portal"],
+)
+
+api_router.include_router(
+    fax_portal_case.router,
+    tags=["fax portal"],
+)
+
+api_router.include_router(
+    fax_portal_twilio_webhooks.router,
     tags=["fax portal"],
 )
