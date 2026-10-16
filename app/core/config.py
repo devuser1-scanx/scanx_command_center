@@ -44,6 +44,14 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 15
     jwt_refresh_token_expire_days: int = 7
 
+    # Automatic logoff (HIPAA 45 CFR 164.312(a)(2)(iii)). The browser signs the
+    # user out after this much inactivity (real input, not background polling),
+    # warning them `session_warning_seconds` before. A session also ends this many
+    # hours after login whatever the activity, so it cannot slide on forever.
+    session_idle_timeout_minutes: int = 15
+    session_warning_seconds: int = 120
+    session_max_hours: int = 12
+
     cors_allowed_origins: str = (
         "http://localhost:5173,"
         "http://localhost:3000,"
@@ -164,6 +172,30 @@ class Settings(BaseSettings):
     def validate_refresh_token_expiry(cls, value: int) -> int:
         if not 0 < value <= 30:
             raise ValueError("jwt_refresh_token_expire_days must be between 1 and 30")
+
+        return value
+
+    @field_validator("session_idle_timeout_minutes")
+    @classmethod
+    def validate_session_idle_timeout(cls, value: int) -> int:
+        if not 1 <= value <= 120:
+            raise ValueError("session_idle_timeout_minutes must be between 1 and 120")
+
+        return value
+
+    @field_validator("session_warning_seconds")
+    @classmethod
+    def validate_session_warning(cls, value: int) -> int:
+        if not 10 <= value <= 600:
+            raise ValueError("session_warning_seconds must be between 10 and 600")
+
+        return value
+
+    @field_validator("session_max_hours")
+    @classmethod
+    def validate_session_max_hours(cls, value: int) -> int:
+        if not 1 <= value <= 24:
+            raise ValueError("session_max_hours must be between 1 and 24")
 
         return value
 

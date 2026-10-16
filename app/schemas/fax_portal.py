@@ -114,6 +114,35 @@ class AgentResponse(BaseModel):
     accepting_new: bool
 
 
+class CallQueueItem(BaseModel):
+    """One referral in the signed-in user's call queue."""
+
+    referral_id: int
+    priority: Literal["callback", "reply", "overdue", "new", "later"]
+    # "Callback", "SMS reply", "Overdue", "New", or "Due 3 PM" for later today.
+    priority_label: str
+    patient_name: str
+    phone: str | None
+    phone_e164: str | None
+    exam: str | None
+    provider: str | None
+    # When the fax became a referral; the page shows its age (22m, 1h, 3d).
+    received_at: datetime
+    # Unsuccessful calls so far, out of the call limit.
+    attempts: int
+    attempt_limit: int
+    last_result: str | None
+    # What to do next: "Call 3", "Call at 5:30 PM", "Reply to SMS - Call 3".
+    next_action: str
+
+
+class CallQueueResponse(BaseModel):
+    items: list[CallQueueItem]
+    # Referrals to work now (everything except "later today").
+    due_now: int
+    later_today: int
+
+
 class FaxPortalCountsResponse(BaseModel):
     call_queue: int
     intake_review: int
@@ -154,6 +183,11 @@ class IntakeDocument(BaseModel):
     doc_type: str | None
     page_start: int | None
     page_end: int | None
+    # Comprehend's per-document "PHI Summary". Read-only. Never logged.
+    summary: str | None = None
+    # False for a document that belongs to another patient on a multi-patient
+    # fax: its summary is not shown for this card.
+    for_patient: bool = True
 
 
 class IntakeFax(BaseModel):
@@ -180,6 +214,10 @@ class IntakeFields(BaseModel):
     physician_name: str | None
     physician_fax_no: str | None
     physician_email: str | None
+    address: str | None = None
+    # One of the Exam 1 reason options, and the free text written beside it.
+    reason: str | None = None
+    reason_other: str | None = None
 
 
 class ClinicChoice(BaseModel):
@@ -198,10 +236,22 @@ class ClinicSuggestion(ClinicChoice):
     reason: str
 
 
+class ClinicDistance(BaseModel):
+    """How far a clinic is from the patient's address (ZIP code to ZIP code,
+    in a straight line)."""
+
+    acuity_calendar_id: int
+    name: str
+    miles: float
+
+
 class IntakeSuggestions(BaseModel):
     clinic: ClinicSuggestion | None
     exam_1: ExamChoice | None
     exam_2: ExamChoice | None
+    # Every clinic with its distance from the patient's address, nearest first;
+    # empty when the address has no usable ZIP code.
+    clinic_distances: list[ClinicDistance] = []
 
 
 class IntakeDetailResponse(BaseModel):
@@ -233,6 +283,7 @@ class IntakeUpdateRequest(BaseModel):
     physician_name: str | None = Field(default=None, max_length=255)
     physician_fax_no: str | None = Field(default=None, max_length=255)
     physician_email: str | None = Field(default=None, max_length=255)
+    address: str | None = Field(default=None, max_length=500)
     reason: str | None = Field(default=None, max_length=255)
     reason_other: str | None = Field(default=None, max_length=2000)
     acuity_calendar_id: int | None = None
@@ -268,6 +319,9 @@ class AcuityAppointmentTypeResponse(BaseModel):
     price: str | None
     # False when a clinic was chosen and it does not offer this exam.
     available_at_calendar: bool
+    # The options of this exam's "Reason for the appointment" dropdown in
+    # Acuity, in Acuity's order; empty when it has none.
+    reason_options: list[str] = []
 
 
 class AcuitySyncStatusResponse(BaseModel):
@@ -479,6 +533,28 @@ class BookingMatch(BaseModel):
     time: str | None
     canceled: bool
     already_linked: bool
+
+
+class AvailableTime(BaseModel):
+    """One open slot from Acuity. `time` is Acuity's own timestamp (sent back to
+    book it); `label` is the time of day in the clinic's timezone."""
+
+    time: str
+    label: str
+
+
+class DirectBookRequest(BaseModel):
+    # A `time` exactly as returned by the availability list.
+    time: str = Field(min_length=10, max_length=40)
+    # Only needed when the patient's card has no email.
+    email: str | None = Field(default=None, max_length=150)
+
+
+class DirectBookResponse(BaseModel):
+    appointment_id: str
+    status: str
+    row_version: int
+    when_label: str
 
 
 class BookingInfoResponse(BaseModel):

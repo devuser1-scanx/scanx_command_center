@@ -320,22 +320,15 @@ def _summary(db: Session) -> BoardSummaryResponse:
 
 
 def get_counts(db: Session, user: CCUser) -> FaxPortalCountsResponse:
-    """Sidebar badges: my open cards due now or overdue, and cards waiting in
-    Intake Review."""
-    call_queue = db.scalar(
-        select(func.count())
-        .select_from(R)
-        .join(CCFpStatus, CCFpStatus.code == R.status)
-        .where(
-            R.assigned_user_id == user.id,
-            CCFpStatus.is_open.is_(True),
-            R.status != REVIEW,
-            or_(R.callback_at <= func.now(), R.next_action_at <= func.now()),
-        )
-    )
+    """Sidebar badges: what is in my call queue to work now (callbacks due,
+    replies, overdue follow-ups, new referrals), and cards waiting in Intake
+    Review."""
+    # Imported here: the queue module is independent of this one.
+    from app.services.fax_portal_queue import count_due
+
     intake_review = db.scalar(select(func.count()).select_from(R).where(R.status == REVIEW))
 
-    return FaxPortalCountsResponse(call_queue=call_queue or 0, intake_review=intake_review or 0)
+    return FaxPortalCountsResponse(call_queue=count_due(db, user), intake_review=intake_review or 0)
 
 
 def list_agents(db: Session) -> list[AgentResponse]:

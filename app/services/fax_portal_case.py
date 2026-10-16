@@ -262,7 +262,7 @@ def _load_card(db: Session, referral_id: int) -> R:
 
 
 def _call_source(call: CCFpCallLog) -> str:
-    """"twilio" for a call placed from the browser (it has a Twilio call id once
+    """ "twilio" for a call placed from the browser (it has a Twilio call id once
     Twilio has picked it up, and is "starting" before that), "manual" for one an
     agent logged after calling another way."""
     return "twilio" if (call.twilio_call_sid or call.twilio_status == STARTING) else "manual"
@@ -419,6 +419,7 @@ def get_case(db: Session, referral_id: int) -> CaseDetailResponse:
             physician_name=card.physician_name,
             physician_fax_no=card.physician_fax_no,
             physician_email=card.physician_email,
+            address=card.address,
             reason=card.reason,
             reason_other=card.reason_other,
         ),
@@ -714,9 +715,6 @@ def record_call_result(
 
     if result.code == "callback_requested" and payload.callback_at is None:
         raise InvalidMoveError("Pick when the patient asked to be called back.")
-
-    if result.code == "booked" and appointment_id is None:
-        raise InvalidMoveError("Pick the Acuity appointment the patient booked.")
 
     counts = bool(payload.counts_toward_limit) if is_other else result.counts_toward_limit_default
 

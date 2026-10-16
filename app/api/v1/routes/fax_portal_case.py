@@ -10,11 +10,14 @@ from app.models.auth import CCUser
 from app.models.fax_portal import CCFpReferralBoard
 from app.repositories.auth import collect_role_codes
 from app.schemas.fax_portal import (
+    AvailableTime,
     BookingInfoResponse,
     CallResultRequest,
     CallResultResponse,
     CaseDetailResponse,
     DialCallResponse,
+    DirectBookRequest,
+    DirectBookResponse,
     DoNotCallResponse,
     IntakeUpdateRequest,
     IntakeUpdateResponse,
@@ -28,6 +31,7 @@ from app.services import (
     fax_portal_booking,
     fax_portal_calls,
     fax_portal_case,
+    fax_portal_direct_booking,
     fax_portal_intake,
     fax_portal_messages,
 )
@@ -274,6 +278,65 @@ def send_message_route(
 # ---------------------------------------------------------------------
 # Booking
 # ---------------------------------------------------------------------
+
+
+@router.get("/referrals/{referral_id}/direct-booking/dates", response_model=list[str])
+def direct_booking_dates_route(
+    referral_id: int,
+    month: str = Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
+    db: Session = Depends(get_db),
+    current_user: CCUser = Depends(require_fax_portal_access),
+) -> list[str]:
+    """Days in `month` (YYYY-MM) with open times for the referral's exam and
+    clinic, straight from Acuity."""
+    try:
+        return fax_portal_direct_booking.availability_dates(db, referral_id, month)
+    except ReferralError as error:
+        _raise(db, error)
+        raise
+
+
+@router.get("/referrals/{referral_id}/direct-booking/times", response_model=list[AvailableTime])
+def direct_booking_times_route(
+    referral_id: int,
+    date: str = Query(pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    db: Session = Depends(get_db),
+    current_user: CCUser = Depends(require_fax_portal_access),
+) -> list[AvailableTime]:
+    try:
+        return fax_portal_direct_booking.availability_times(db, referral_id, date)
+    except ReferralError as error:
+        _raise(db, error)
+        raise
+
+
+@router.post("/referrals/{referral_id}/direct-booking", response_model=DirectBookResponse)
+def direct_book_route(
+    referral_id: int,
+    payload: DirectBookRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: CCUser = Depends(require_fax_portal_access),
+) -> DirectBookResponse:
+    """Books the appointment in Acuity itself (no payment step: collected at
+    check-in) and marks the referral Appointment Booked."""
+    try:
+        response = fax_portal_direct_booking.book(
+            db,
+            referral_id,
+            time=payload.time,
+            email=payload.email,
+            user=current_user,
+            ip_address=request_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+    except ReferralError as error:
+        _raise(db, error)
+        raise
+
+    db.commit()
+
+    return response
 
 
 @router.get("/referrals/{referral_id}/booking", response_model=BookingInfoResponse)

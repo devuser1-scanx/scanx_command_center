@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -254,17 +254,33 @@ def issue_tokens(
     user: CCUser,
     ip_address: str | None,
     user_agent: str | None,
+    auth_at: datetime | None = None,
 ) -> IssuedTokens:
+    """Issues an access and a refresh token. `auth_at` is when the user signed
+    in (None = now, for a login); a refresh passes the original one along, so
+    neither token outlives the session's maximum length."""
+    now = utc_now()
+    started = auth_at or now
+    remaining = max(
+        started + timedelta(hours=settings.session_max_hours) - now,
+        timedelta(seconds=1),
+    )
+    access_life = min(timedelta(minutes=settings.jwt_access_token_expire_minutes), remaining)
+    refresh_life = min(timedelta(days=settings.jwt_refresh_token_expire_days), remaining)
+
     access_token = create_access_token(
         subject=str(user.id),
         additional_claims={
             "roles": collect_role_codes(user),
             "permissions": collect_permission_codes(user),
         },
+        expires_delta=access_life,
     )
 
-    refresh_token = create_refresh_token(subject=str(user.id))
-    refresh_expires_at = utc_now() + timedelta(days=settings.jwt_refresh_token_expire_days)
+    refresh_token = create_refresh_token(
+        subject=str(user.id), expires_delta=refresh_life, auth_at=started
+    )
+    refresh_expires_at = now + refresh_life
 
     create_session(
         db,
@@ -280,7 +296,7 @@ def issue_tokens(
     return IssuedTokens(
         access_token=access_token,
         refresh_token=refresh_token,
-        expires_in=settings.jwt_access_token_expire_minutes * 60,
+        expires_in=int(access_life.total_seconds()),
         user=build_current_user_response(user),
     )
 
@@ -343,6 +359,29 @@ def refresh_tokens(
             detail="User account is inactive.",
         )
 
+    # When the user signed in. Tokens from before this existed carry no claim:
+    # their own issue time stands in for it.
+    raw_auth_at = payload.get("auth_at")
+    auth_at = (
+        datetime.fromtimestamp(raw_auth_at, UTC)
+        if isinstance(raw_auth_at, int)
+        else ensure_utc(session.created_at)
+    )
+    too_long = now >= auth_at + timedelta(hours=settings.session_max_hours)
+    # A signed-in browser refreshes about every access-token lifetime. A much
+    # longer gap means no browser has been open: the user left (closed the tab,
+    # shut the lid), so the next visitor must sign in rather than inherit the
+    # session.
+    abandoned = ensure_utc(session.created_at) + timedelta(
+        minutes=settings.session_idle_timeout_minutes + settings.jwt_access_token_expire_minutes
+    ) < now
+
+    if too_long or abandoned:
+        revoke_session(db, session=session, revoked_at=now)
+        db.commit()
+
+        raise INVALID_REFRESH_TOKEN_ERROR
+
     revoke_session(
         db,
         session=session,
@@ -355,6 +394,7 @@ def refresh_tokens(
         user=session.user,
         ip_address=ip_address,
         user_agent=user_agent,
+        auth_at=auth_at,
     )
 
 

@@ -187,6 +187,7 @@ def list_acuity_types_route(
             duration_min=t.duration_min,
             price=str(t.price) if t.price is not None else None,
             available_at_calendar=available,
+            reason_options=list(t.reason_options or []),
         )
         for t, available in fax_portal_acuity.list_active_types(db, calendar_id)
     ]

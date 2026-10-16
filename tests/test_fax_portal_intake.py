@@ -17,6 +17,7 @@ from app.models.fax_portal import (
     CCFpAcuityCalendar,
     CCFpFax,
     CCFpFaxDocument,
+    CCFpFaxPatient,
     CCFpReferralExam,
 )
 
@@ -240,6 +241,60 @@ def test_detail_has_fields_fax_and_documents(
         ("Cover", 1, 1),
         ("Referral", 2, 3),
     ]
+
+
+def test_detail_returns_each_documents_own_phi_summary(
+    client: TestClient, db_session: Session, staff: Any
+) -> None:
+    fax = make_fax(db_session)
+    fax.summary = "Whole-fax summary: not what the form shows."
+    patients = [
+        CCFpFaxPatient(fax_id=fax.id, idx=0, full_name="Ann Alpha"),
+        CCFpFaxPatient(fax_id=fax.id, idx=1, full_name="Ben Beta"),
+    ]
+    db_session.add_all(patients)
+    db_session.flush()
+    db_session.add_all(
+        [
+            CCFpFaxDocument(fax_id=fax.id, idx=0, name="Cover", summary="Fax cover sheet."),
+            CCFpFaxDocument(
+                fax_id=fax.id, idx=1, name="Ann referral", patient_idx=0, summary="Ann: carotid."
+            ),
+            CCFpFaxDocument(
+                fax_id=fax.id, idx=2, name="Ben referral", patient_idx=1, summary="Ben: abdomen."
+            ),
+        ]
+    )
+    card = intake_card(db_session, fax, fax_patient_id=patients[0].id)
+
+    documents = detail(client, auth_headers(client, staff), card.id)["fax"]["documents"]
+
+    assert [(d["name"], d["summary"], d["for_patient"]) for d in documents] == [
+        ("Cover", "Fax cover sheet.", True),
+        ("Ann referral", "Ann: carotid.", True),
+        # Another patient's document is flagged so the form leaves it out.
+        ("Ben referral", "Ben: abdomen.", False),
+    ]
+
+
+def test_the_patient_address_is_returned_and_can_be_corrected(
+    client: TestClient, db_session: Session, staff: Any
+) -> None:
+    card = intake_card(db_session, first_name="Ann", address="12 Elm St, Dallas, TX 75201")
+    headers = auth_headers(client, staff)
+
+    assert detail(client, headers, card.id)["fields"]["address"] == "12 Elm St, Dallas, TX 75201"
+
+    response = client.patch(
+        f"/fax-portal/referrals/{card.id}/intake",
+        json={"row_version": 1, "address": "  14 Elm St, Dallas, TX 75201 "},
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["changed_fields"] == ["address"]
+    db_session.refresh(card)
+    assert card.address == "14 Elm St, Dallas, TX 75201"
 
 
 def test_detail_suggests_exams_from_the_fax_text(

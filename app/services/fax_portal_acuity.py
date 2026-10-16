@@ -83,7 +83,80 @@ def _calendar_values(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _type_values(item: dict[str, Any]) -> dict[str, Any]:
+REASON_FIELD_PREFIX = "reason for the appointment"
+
+# (form id, reason field id, options) for one exam; (None, None, []) when it has none.
+ReasonInfo = tuple[int | None, int | None, list[str]]
+
+
+def reason_info_by_exam(
+    types: list[dict[str, Any]], forms: list[dict[str, Any]]
+) -> dict[int, ReasonInfo]:
+    """The "Reason for the appointment" dropdown of each exam, from Acuity's forms.
+
+    A form is matched to an exam through the exam's `formIDs` first, then through
+    the form's `appointmentTypeIDs` (several exams can share one form). The first
+    form with a reason field wins: the form field whose name starts with "Reason
+    for the appointment" (case-insensitive, trimmed). Its options keep Acuity's
+    order and are trimmed. No form, or no reason field, gives (None, None, []).
+    """
+    forms_by_id = {fid: form for form in forms if (fid := _int(form.get("id"))) is not None}
+    result: dict[int, ReasonInfo] = {}
+
+    for item in types:
+        type_id = _int(item.get("id"))
+
+        if type_id is None:
+            continue
+
+        form_ids = [fid for fid in (_int(f) for f in item.get("formIDs") or []) if fid is not None]
+        form_ids += [
+            fid
+            for fid, form in forms_by_id.items()
+            if type_id in {_int(t) for t in form.get("appointmentTypeIDs") or []}
+            and fid not in form_ids
+        ]
+        info: ReasonInfo = (None, None, [])
+
+        for form_id in form_ids:
+            field = next(
+                (
+                    f
+                    for f in (forms_by_id.get(form_id) or {}).get("fields") or []
+                    if isinstance(f, dict)
+                    and (_text(f.get("name")) or "").lower().startswith(REASON_FIELD_PREFIX)
+                ),
+                None,
+            )
+
+            if field is not None:
+                options = [o for o in (_text(o) for o in field.get("options") or []) if o]
+                info = (form_id, _int(field.get("id")), options)
+
+                break
+
+        result[type_id] = info
+
+    return result
+
+
+def exams_without_reasons(db: Session) -> list[str]:
+    """Names of the active exams with no reason options (for the sync's report)."""
+    return list(
+        db.scalars(
+            select(CCFpAcuityAppointmentType.name)
+            .where(
+                CCFpAcuityAppointmentType.is_active.is_(True),
+                func.jsonb_array_length(CCFpAcuityAppointmentType.reason_options) == 0,
+            )
+            .order_by(CCFpAcuityAppointmentType.name)
+        )
+    )
+
+
+def _type_values(item: dict[str, Any], reason: ReasonInfo | None = None) -> dict[str, Any]:
+    form_id, field_id, options = reason or (None, None, [])
+
     return {
         "name": (_text(item.get("name")) or f"Appointment type {item.get('id')}")[:255],
         "category": (_text(item.get("category")) or "")[:150] or None,
@@ -92,6 +165,9 @@ def _type_values(item: dict[str, Any]) -> dict[str, Any]:
         "description": _text(item.get("description")),
         "scheduling_url": _text(item.get("schedulingUrl")),
         "is_private": item.get("private") if isinstance(item.get("private"), bool) else None,
+        "acuity_form_id": form_id,
+        "reason_field_id": field_id,
+        "reason_options": options,
     }
 
 
@@ -102,9 +178,11 @@ def run_acuity_sync(
     triggered_by_user_id: int | None = None,
     fetch_calendars: Fetcher | None = None,
     fetch_types: Fetcher | None = None,
+    fetch_forms: Fetcher | None = None,
 ) -> CCFpAcuitySyncRun:
     """Copies Acuity's calendars (clinics) and appointment types (exams) into
-    cc_fp_acuity_*, matching on the Acuity id:
+    cc_fp_acuity_*, matching on the Acuity id (each exam also gets its form's
+    "Reason for the appointment" options, from GET /forms):
 
       new id          -> insert
       existing id     -> update changed values in place (renames included)
@@ -129,12 +207,13 @@ def run_acuity_sync(
 
         calendars = (fetch_calendars or acuity_client.list_calendars)()
         types = (fetch_types or acuity_client.list_appointment_types)()
+        forms = (fetch_forms or acuity_client.list_forms)()
 
-        _guard_against_empty_answer(db, calendars, types)
+        _guard_against_empty_answer(db, calendars, types, forms)
 
         changes: list[dict[str, Any]] = []
         _sync_calendars(db, run, calendars, changes)
-        _sync_types(db, run, types, changes)
+        _sync_types(db, run, types, changes, reason_info_by_exam(types, forms))
         _rebuild_type_calendars(db, types)
 
         run.status = "success"
@@ -142,6 +221,12 @@ def run_acuity_sync(
         run.changes = changes[:MAX_RECORDED_CHANGES] or None
 
         db.commit()
+
+        without = exams_without_reasons(db)
+        # Exam names are not patient data; only names and counts are logged.
+        logger.info(
+            "Acuity sync: %d exam(s) without reason options: %s", len(without), "; ".join(without)
+        )
 
         return run
 
@@ -175,7 +260,10 @@ def _error_message(exc: Exception) -> str:
 
 
 def _guard_against_empty_answer(
-    db: Session, calendars: list[dict[str, Any]], types: list[dict[str, Any]]
+    db: Session,
+    calendars: list[dict[str, Any]],
+    types: list[dict[str, Any]],
+    forms: list[dict[str, Any]],
 ) -> None:
     """An empty list while we hold active rows is far more likely an outage or
     a bad key than a business that closed every clinic. Refuse rather than
@@ -193,6 +281,14 @@ def _guard_against_empty_answer(
         .limit(1)
     ):
         raise SyncRefusedError("Acuity returned no appointment types; nothing was changed.")
+
+    # No forms at all would wipe every exam's reason options.
+    if not forms and db.scalar(
+        select(CCFpAcuityAppointmentType.acuity_appointment_type_id)
+        .where(func.jsonb_array_length(CCFpAcuityAppointmentType.reason_options) > 0)
+        .limit(1)
+    ):
+        raise SyncRefusedError("Acuity returned no forms; nothing was changed.")
 
 
 def _sync_calendars(
@@ -248,6 +344,7 @@ def _sync_types(
     run: CCFpAcuitySyncRun,
     items: list[dict[str, Any]],
     changes: list[dict[str, Any]],
+    reasons: dict[int, ReasonInfo],
 ) -> None:
     existing = {
         row.acuity_appointment_type_id: row for row in db.scalars(select(CCFpAcuityAppointmentType))
@@ -261,7 +358,7 @@ def _sync_types(
             continue
 
         seen.add(type_id)
-        values = _type_values(item)
+        values = _type_values(item, reasons.get(type_id))
         active = item.get("active", True) is not False
         row = existing.get(type_id)
 

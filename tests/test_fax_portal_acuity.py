@@ -59,12 +59,22 @@ TYPES: list[dict[str, Any]] = [
 ]
 
 
-def sync(db: Session, calendars=None, types=None, **kwargs):
+FORMS: list[dict[str, Any]] = []  # most tests do not care about intake forms
+
+
+@pytest.fixture(autouse=True)
+def no_real_acuity_forms(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A sync that is not given forms must never reach Acuity's real API.
+    monkeypatch.setattr(acuity_client, "list_forms", lambda: [])
+
+
+def sync(db: Session, calendars=None, types=None, forms=None, **kwargs):
     return run_acuity_sync(
         db,
         trigger=kwargs.pop("trigger", "scheduled"),
         fetch_calendars=lambda: copy.deepcopy(CALENDARS if calendars is None else calendars),
         fetch_types=lambda: copy.deepcopy(TYPES if types is None else types),
+        fetch_forms=lambda: copy.deepcopy(FORMS if forms is None else forms),
         **kwargs,
     )
 

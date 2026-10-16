@@ -57,7 +57,7 @@ class MessageSendError(ReferralError):
 
 
 # ---------------------------------------------------------------------
-# Templates (approved wording; every one ends with the opt-out line)
+# Templates (approved wording; the first-contact ones end with the opt-out line)
 # ---------------------------------------------------------------------
 
 TEMPLATES: dict[str, tuple[str, str, str]] = {
@@ -85,6 +85,40 @@ TEMPLATES: dict[str, tuple[str, str, str]] = {
         "en",
         "Hi {patient_first}, this is ScanX confirming we will call you back about your "
         "{exam}. If another time is better, book here: {booking_link} Reply STOP to opt out.",
+    ),
+    # The follow-up texts after the first message (Day 1, the standard RCS message
+    # with the Book Now button, is sent from the Inbox app, not from here). They
+    # point back to that first message instead of carrying a link, and are the
+    # approved wording as supplied.
+    "follow_up_day_3_en": (
+        "Follow-up, day 3 (EN)",
+        "en",
+        "Hi {patient_first}, this is ScanX Health. We're following up regarding the "
+        "ultrasound referral we received from your doctor's office.\n"
+        "We know finding the right time can be difficult. You can book anytime by "
+        "tapping the Book Now button in our first message.\n"
+        "Prefer some help? Simply reply to this text or call us at (469) 804-6999, "
+        "and we'll be happy to assist.",
+    ),
+    "follow_up_day_6_en": (
+        "Follow-up, day 6 (EN)",
+        "en",
+        "Hi {patient_first}, ScanX Health here. We're following up on the ultrasound "
+        "referral from your doctor's office and haven't been able to connect with you yet.\n"
+        "If you'd still like to schedule, simply tap the Book Now button in our first "
+        "message.\n"
+        "Prefer our help? Reply YES and we'll assist you with scheduling.\n"
+        "If now isn't a good time, you can let us know that too.",
+    ),
+    "follow_up_day_9_en": (
+        "Follow-up, day 9, final (EN)",
+        "en",
+        "Hi {patient_first}, this is ScanX Health with a final follow-up regarding the "
+        "ultrasound referral from your doctor's office.\n"
+        "If you'd still like to schedule, tap the Book Now button in our first message, "
+        "or simply reply YES and we'll help you.\n"
+        "If we don't hear from you, we'll update your doctor's office that we were "
+        "unable to reach you for scheduling.",
     ),
 }
 

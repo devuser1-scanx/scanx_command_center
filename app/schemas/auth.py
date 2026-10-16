@@ -100,5 +100,17 @@ class MessageResponse(BaseModel):
     message: str
 
 
+class SessionPolicyResponse(BaseModel):
+    """The automatic-logoff rules the browser applies (set by the server so one
+    place decides them)."""
+
+    # Sign the user out after this much inactivity.
+    idle_timeout_seconds: int
+    # Warn this long before that happens.
+    warning_seconds: int
+    # A session ends this long after login whatever the activity.
+    max_session_seconds: int
+
+
 class ForgotPasswordResponse(BaseModel):
     message: str

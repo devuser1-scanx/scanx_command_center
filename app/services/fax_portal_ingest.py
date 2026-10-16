@@ -265,6 +265,7 @@ def _create_cards(
                     "phone_e164": patient["phone_e164"] if patient else None,
                     "gender": patient["gender"] if patient else None,
                     "dob": patient["dob"] if patient else None,
+                    "address": patient["address"] if patient else None,
                     "physician_name": guess.provider["name"] if guess.provider else None,
                     "physician_fax_no": guess.fax_number,
                     "physician_email": guess.email,

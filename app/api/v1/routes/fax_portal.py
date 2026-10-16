@@ -16,10 +16,12 @@ from app.schemas.fax_portal import (
     AssignReferralRequest,
     AssignReferralResponse,
     BoardResponse,
+    CallQueueResponse,
     FaxPortalCountsResponse,
     MoveReferralRequest,
     MoveReferralResponse,
 )
+from app.services import fax_portal_queue
 from app.services.fax_portal_board import (
     board_changed_since,
     get_board,
@@ -152,6 +154,16 @@ def list_agents_route(
     current_user: CCUser = Depends(require_fax_portal_access),
 ) -> list[AgentResponse]:
     return list_agents(db)
+
+
+@router.get("/queue", response_model=CallQueueResponse)
+def get_call_queue_route(
+    db: Session = Depends(get_db),
+    current_user: CCUser = Depends(require_fax_portal_access),
+) -> CallQueueResponse:
+    """The signed-in user's call queue: callbacks due, patients who texted back,
+    overdue follow-ups, new referrals oldest first, then what is due later today."""
+    return fax_portal_queue.get_queue(db, current_user)
 
 
 @router.get("/counts", response_model=FaxPortalCountsResponse)

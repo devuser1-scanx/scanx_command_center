@@ -248,12 +248,21 @@ def test_cards_move_freely_between_working_columns(db_session: Session) -> None:
     assert card.row_version == 4
 
 
-@pytest.mark.parametrize("source", ["button", "drag"])
-def test_booking_needs_the_acuity_appointment(db_session: Session, source: str) -> None:
+def test_a_drag_to_booked_needs_the_acuity_appointment(db_session: Session) -> None:
     card = make_card(db_session, status="follow_up_due")
 
     with pytest.raises(InvalidMoveError, match="Acuity appointment"):
-        move(db_session, card, "appointment_booked", source=source)
+        move(db_session, card, "appointment_booked", source="drag")
+
+
+@pytest.mark.parametrize("source", ["button", "call_result"])
+def test_an_agent_can_mark_booked_without_the_appointment(db_session: Session, source: str) -> None:
+    card = make_card(db_session, status="follow_up_due")
+
+    move(db_session, card, "appointment_booked", source=source)
+
+    assert card.status == "appointment_booked"
+    assert card.acuity_appointment_id is None and card.booked_source == "agent"
 
 
 def test_booking_records_appointment_and_source(db_session: Session) -> None:

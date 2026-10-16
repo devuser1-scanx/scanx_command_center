@@ -14,6 +14,7 @@ from app.core.cookies import (
     require_csrf_token,
     set_auth_cookies,
 )
+from app.core.config import settings
 from app.core.security import generate_secure_token
 from app.db.session import get_db
 from app.models.auth import CCUser
@@ -24,6 +25,7 @@ from app.schemas.auth import (
     ForgotPasswordResponse,
     LoginRequest,
     MessageResponse,
+    SessionPolicyResponse,
     OAuthTokenResponse,
     ResetPasswordRequest,
     TokenResponse,
@@ -208,6 +210,26 @@ def get_my_profile(
     current_user: CCUser = Depends(get_current_user),
 ) -> CurrentUserResponse:
     return build_current_user_response(current_user)
+
+
+@router.get(
+    "/session-policy",
+    response_model=SessionPolicyResponse,
+    status_code=status.HTTP_200_OK,
+)
+def get_session_policy(
+    current_user: CCUser = Depends(get_current_user),
+) -> SessionPolicyResponse:
+    """The automatic-logoff rules for the signed-in browser: idle timeout, the
+    warning before it, and the maximum session length."""
+    idle = settings.session_idle_timeout_minutes * 60
+
+    return SessionPolicyResponse(
+        idle_timeout_seconds=idle,
+        # The warning cannot be longer than the timeout itself.
+        warning_seconds=min(settings.session_warning_seconds, idle),
+        max_session_seconds=settings.session_max_hours * 3600,
+    )
 
 
 @router.post(
