@@ -7,6 +7,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.api.dependencies.auth import get_current_user
+from app.core.config import settings
 from app.core.cookies import (
     REFRESH_TOKEN_COOKIE_NAME,
     clear_auth_cookies,
@@ -14,7 +15,6 @@ from app.core.cookies import (
     require_csrf_token,
     set_auth_cookies,
 )
-from app.core.config import settings
 from app.core.security import generate_secure_token
 from app.db.session import get_db
 from app.models.auth import CCUser
@@ -25,9 +25,9 @@ from app.schemas.auth import (
     ForgotPasswordResponse,
     LoginRequest,
     MessageResponse,
-    SessionPolicyResponse,
     OAuthTokenResponse,
     ResetPasswordRequest,
+    SessionPolicyResponse,
     TokenResponse,
 )
 from app.services.auth import (

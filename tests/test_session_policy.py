@@ -39,9 +39,7 @@ def session_of(db: Session, token: str) -> Any:
 # ---------------------------------------------------------------------
 
 
-def test_the_refresh_token_records_when_the_user_signed_in(
-    db_session: Session, user: Any
-) -> None:
+def test_the_refresh_token_records_when_the_user_signed_in(db_session: Session, user: Any) -> None:
     before = int(datetime.now(UTC).timestamp())
 
     issued = sign_in(db_session, user)
@@ -76,9 +74,7 @@ def test_a_session_cannot_be_refreshed_past_its_maximum_length(
     assert session_of(db_session, issued.refresh_token).revoked_at is not None
 
 
-def test_tokens_issued_late_in_a_session_never_outlive_it(
-    db_session: Session, user: Any
-) -> None:
+def test_tokens_issued_late_in_a_session_never_outlive_it(db_session: Session, user: Any) -> None:
     started = datetime.now(UTC) - timedelta(hours=settings.session_max_hours) + timedelta(minutes=5)
 
     issued = issue_tokens(db_session, user=user, ip_address=None, user_agent=None, auth_at=started)
@@ -90,7 +86,9 @@ def test_tokens_issued_late_in_a_session_never_outlive_it(
     assert refresh_exp <= deadline + timedelta(seconds=2)
     assert access_exp <= deadline + timedelta(seconds=2)
     assert issued.expires_in <= 5 * 60 + 2
-    assert session_of(db_session, issued.refresh_token).expires_at <= deadline + timedelta(seconds=2)
+    assert session_of(db_session, issued.refresh_token).expires_at <= deadline + timedelta(
+        seconds=2
+    )
 
 
 def test_a_normal_login_keeps_the_usual_token_lifetimes(db_session: Session, user: Any) -> None:

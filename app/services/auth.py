@@ -372,9 +372,13 @@ def refresh_tokens(
     # longer gap means no browser has been open: the user left (closed the tab,
     # shut the lid), so the next visitor must sign in rather than inherit the
     # session.
-    abandoned = ensure_utc(session.created_at) + timedelta(
-        minutes=settings.session_idle_timeout_minutes + settings.jwt_access_token_expire_minutes
-    ) < now
+    abandoned = (
+        ensure_utc(session.created_at)
+        + timedelta(
+            minutes=settings.session_idle_timeout_minutes + settings.jwt_access_token_expire_minutes
+        )
+        < now
+    )
 
     if too_long or abandoned:
         revoke_session(db, session=session, revoked_at=now)
