@@ -48,14 +48,15 @@ class Settings(BaseSettings):
     # user out after this much inactivity (real input, not background polling),
     # warning them `session_warning_seconds` before. A session also ends this many
     # hours after login whatever the activity, so it cannot slide on forever.
-    session_idle_timeout_minutes: int = 15
+    session_idle_timeout_minutes: int = 30
     session_warning_seconds: int = 120
     session_max_hours: int = 12
 
     cors_allowed_origins: str = (
         "http://localhost:5173,"
         "http://localhost:3000,"
-        "https://scanx-command-center-fe-794794356928.us-central1.run.app"
+        "https://scanx-command-center-fe-794794356928.us-central1.run.app,"
+        "https://scanx-command-center.cloud.run"
     )
 
     frontend_base_url: str = "http://localhost:3000"
