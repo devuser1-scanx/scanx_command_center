@@ -386,12 +386,15 @@ def refresh_tokens(
 
         raise INVALID_REFRESH_TOKEN_ERROR
 
+    # Revoking the old session and creating its replacement are saved together
+    # (issue_tokens commits): if the server stops in between, the old session is
+    # still valid and the browser simply tries again, instead of being left with
+    # neither and signed out.
     revoke_session(
         db,
         session=session,
         revoked_at=now,
     )
-    db.commit()
 
     return issue_tokens(
         db,
