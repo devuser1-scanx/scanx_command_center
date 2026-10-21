@@ -64,35 +64,101 @@ def locate_fibroscan_blob(appointment_id: str) -> storage.Blob | None:
     return matches[0]
 
 
+# A Tricefy exam folder is "LAST^FIRST^_{YYYYMMDD}/" (older exports) or
+# "LAST^FIRST^_{appointment id}_{YYYYMMDD}/", e.g.
+# "OMONOVA^DURMAMA^_1790197523_20261020/".
+_TRICEFY_FOLDER = re.compile(
+    r"^(?P<last>[^^]*)\^(?P<first>[^^]*)\^_(?:(?P<appointment_id>.+)_)?(?P<date>\d{8})/?$"
+)
+
+
+def _folder_parts(prefix: str) -> re.Match[str] | None:
+    return _TRICEFY_FOLDER.match(prefix[len(_TRICEFY_PREFIX) :])
+
+
+def _matching_tricefy_folders(
+    prefixes: list[str],
+    *,
+    first_name: str,
+    last_name: str,
+    exam_date: date,
+    appointment_id: str | None,
+) -> list[str]:
+    """The tricefy folders that can hold this exam's report.
+
+    With an appointment id (the normal case) the exam is identified by it:
+
+      1. A folder carrying that id IS this exam's folder. The patient's name
+         (which can be misspelled in the export) and the date do not matter, and
+         several exams of one patient, even on one day, each have their own.
+      2. Otherwise only an older-style folder with no id (LAST^FIRST^_YYYYMMDD)
+         for the same patient and day. A folder carrying a different id belongs
+         to another exam and is never used.
+
+    Without an appointment id, the name and date alone decide (any folder of
+    that patient on that day, with or without an id in its name).
+    """
+    day = exam_date.strftime("%Y%m%d")
+    last = last_name.strip().upper()
+    first = first_name.strip().upper()
+    folders = [(prefix, _folder_parts(prefix)) for prefix in prefixes]
+    folders = [(prefix, parts) for prefix, parts in folders if parts is not None]
+
+    if appointment_id and appointment_id.strip():
+        wanted = appointment_id.strip().upper()
+        by_id = [
+            prefix
+            for prefix, parts in folders
+            if (parts.group("appointment_id") or "").upper() == wanted
+        ]
+
+        if by_id:
+            return by_id
+
+        return [
+            prefix
+            for prefix, parts in folders
+            if parts.group("appointment_id") is None
+            and parts.group("last").upper() == last
+            and parts.group("first").upper() == first
+            and parts.group("date") == day
+        ]
+
+    return [
+        prefix
+        for prefix, parts in folders
+        if parts.group("last").upper() == last
+        and parts.group("first").upper() == first
+        and parts.group("date") == day
+    ]
+
+
 def locate_tricefy_blob(
     *,
     first_name: str,
     last_name: str,
     exam_date: date,
+    appointment_id: str | None = None,
 ) -> storage.Blob | None:
-    """Matches a tricefy folder by exact LAST^FIRST^..._{YYYYMMDD}/ name,
-    then picks the human-readable file inside it. Returns None on any
-    ambiguity (zero or multiple folder/file matches) rather than guessing.
+    """Finds the exam's tricefy folder (see _matching_tricefy_folders), then picks
+    the human-readable file inside it. Returns None on any ambiguity (zero or
+    multiple folder/file matches) rather than guessing.
     """
     bucket = _get_bucket()
-
-    folder_marker = f"{last_name.strip().upper()}^{first_name.strip().upper()}^"
-    date_suffix = f"_{exam_date.strftime('%Y%m%d')}/"
 
     folders_iterator = bucket.list_blobs(prefix=_TRICEFY_PREFIX, delimiter="/")
     list(folders_iterator)  # Must be exhausted before .prefixes is populated.
 
     # Case-insensitive: Tricefy folder names are usually all-caps
-    # ("DOE^JANE^_20260101"), but not always - some exports (and the
-    # appointment_id-infixed variant, e.g. "Tester^Tester^_APT123_20260914")
-    # preserve the original name's casing. folder_marker/date_suffix are
-    # already uppercased above, so only the actual prefix needs folding here.
-    matching_folders = [
-        prefix
-        for prefix in folders_iterator.prefixes
-        if prefix[len(_TRICEFY_PREFIX) :].upper().startswith(folder_marker)
-        and prefix.upper().endswith(date_suffix)
-    ]
+    # ("DOE^JANE^_20260101"), but not always - some exports preserve the
+    # original name's casing (e.g. "Tester^Tester^_APT123_20260914").
+    matching_folders = _matching_tricefy_folders(
+        list(folders_iterator.prefixes),
+        first_name=first_name,
+        last_name=last_name,
+        exam_date=exam_date,
+        appointment_id=appointment_id,
+    )
 
     if len(matching_folders) != 1:
         return None
@@ -132,6 +198,8 @@ def locate_report_blob(appointment: Appointment) -> storage.Blob | None:
         first_name=appointment.first_name,
         last_name=appointment.last_name,
         exam_date=exam_date,
+        # The selected exam's own appointment id picks its folder.
+        appointment_id=appointment.appointment_id,
     )
 
 
