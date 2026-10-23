@@ -114,6 +114,7 @@ class Settings(BaseSettings):
     # Never put actual webhook URLs into source control.
     gchat_webhook_dallas: str | None = None
     gchat_webhook_fairview: str | None = None
+    gchat_webhook_arlington: str | None = None
     gchat_webhook_fallback: str | None = None
 
     # Google Chat card buttons.

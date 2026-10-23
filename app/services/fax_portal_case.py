@@ -320,7 +320,7 @@ def get_case(db: Session, referral_id: int) -> CaseDetailResponse:
             select(CCFpActivityLog)
             .where(
                 CCFpActivityLog.referral_id == card.id,
-                CCFpActivityLog.action.in_(["edit_field", "reassign", "do_not_call"]),
+                CCFpActivityLog.action.in_(["edit_field", "reassign", "do_not_call", "fax_back"]),
             )
             .order_by(CCFpActivityLog.occurred_at.asc(), CCFpActivityLog.id.asc())
         )
@@ -583,6 +583,16 @@ def _timeline(
                     at=e.occurred_at,
                     kind="edit",
                     title="Marked do not call",
+                    actor=person(e.user_id),
+                )
+            )
+        elif e.action == "fax_back":
+            events.append(
+                TimelineEvent(
+                    at=e.occurred_at,
+                    kind="edit",
+                    title="Faxed the referring provider",
+                    detail="Unable to reach the patient",
                     actor=person(e.user_id),
                 )
             )

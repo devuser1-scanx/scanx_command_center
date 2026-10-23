@@ -19,6 +19,9 @@ from app.schemas.fax_portal import (
     DirectBookRequest,
     DirectBookResponse,
     DoNotCallResponse,
+    FaxBackDraftResponse,
+    FaxBackRequest,
+    FaxBackResponse,
     IntakeUpdateRequest,
     IntakeUpdateResponse,
     MessageTemplateResponse,
@@ -32,6 +35,7 @@ from app.services import (
     fax_portal_calls,
     fax_portal_case,
     fax_portal_direct_booking,
+    fax_portal_fax_back,
     fax_portal_intake,
     fax_portal_messages,
 )
@@ -327,6 +331,52 @@ def direct_book_route(
             time=payload.time,
             email=payload.email,
             user=current_user,
+            ip_address=request_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+    except ReferralError as error:
+        _raise(db, error)
+        raise
+
+    db.commit()
+
+    return response
+
+
+@router.get("/referrals/{referral_id}/fax-back", response_model=FaxBackDraftResponse)
+def fax_back_draft_route(
+    referral_id: int,
+    db: Session = Depends(get_db),
+    current_user: CCUser = Depends(require_fax_portal_access),
+) -> FaxBackDraftResponse:
+    """What the "fax back to the referring physician" pop-up starts with: the
+    number the referral came from, the subject, and the message with the list of
+    contact attempts."""
+    try:
+        return fax_portal_fax_back.build_draft(db, referral_id)
+    except ReferralError as error:
+        _raise(db, error)
+        raise
+
+
+@router.post("/referrals/{referral_id}/fax-back", response_model=FaxBackResponse)
+def fax_back_route(
+    referral_id: int,
+    payload: FaxBackRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: CCUser = Depends(require_fax_portal_access),
+) -> FaxBackResponse:
+    """Faxes the referring physician (through WestFax's email-to-fax) that the
+    patient could not be reached. The person can change the number, subject and
+    message first; optionally moves the referral to Didn't Respond."""
+    try:
+        response = fax_portal_fax_back.send_fax_back(
+            db,
+            referral_id,
+            payload,
+            user=current_user,
+            role_codes=set(collect_role_codes(current_user)),
             ip_address=request_ip(request),
             user_agent=request.headers.get("user-agent"),
         )

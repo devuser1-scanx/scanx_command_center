@@ -535,6 +535,41 @@ class BookingMatch(BaseModel):
     already_linked: bool
 
 
+class FaxBackDraftResponse(BaseModel):
+    """What the "fax back to the referring physician" pop-up starts with."""
+
+    # The fax number the referral came from (else the physician's number on the
+    # card); blank when neither is known.
+    destination_number: str
+    destination_source: str
+    subject: str
+    # The message, including the list of contact attempts (no message text, and
+    # "Agent" instead of any name). The person can edit all of it.
+    body: str
+    # Only a referral in Fax Provider Name Pending can move to Didn't Respond.
+    can_mark_didnt_respond: bool
+    # Whether the original fax PDF can be sent along with the message.
+    original_fax_available: bool = False
+
+
+class FaxBackRequest(BaseModel):
+    destination_number: str = Field(min_length=1, max_length=100)
+    subject: str | None = Field(default=None, max_length=300)
+    body: str = Field(min_length=1, max_length=20000)
+    # Send the original fax PDF along with the message.
+    attach_original: bool = True
+    # Also move the referral from Fax Provider Name Pending to Didn't Respond.
+    mark_didnt_respond: bool = False
+
+
+class FaxBackResponse(BaseModel):
+    destination_number: str
+    email_message_id: str | None
+    moved_to: str | None
+    row_version: int
+    sent_at: datetime
+
+
 class AvailableTime(BaseModel):
     """One open slot from Acuity. `time` is Acuity's own timestamp (sent back to
     book it); `label` is the time of day in the clinic's timezone."""

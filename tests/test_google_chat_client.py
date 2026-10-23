@@ -4,10 +4,12 @@ from datetime import datetime
 
 import pytest
 
+from app.core.config import settings
 from app.integrations.google_chat_client import (
     PatientCheckedInCardData,
     _build_card,
     _show_admit_button,
+    _webhook_for_clinic,
 )
 
 
@@ -20,9 +22,11 @@ def make_data(
     phone: str | None = "+15551234567",
     exam_type: str | None = "Ultrasound",
     last_name: str | None = "Doe",
+    clinic_name: str | None = None,
 ) -> PatientCheckedInCardData:
     return PatientCheckedInCardData(
         clinic_id=clinic_id,
+        clinic_name=clinic_name,
         clinic_timezone="America/Chicago",
         last_name=last_name,
         first_name=first_name,
@@ -197,3 +201,44 @@ def test_buttons_still_come_after_the_report_file_name() -> None:
     result = buttons(make_data(exam_type="FibroScan / Liver Elastography"))
 
     assert [b["text"] for b in result][-1] == "📞 Call Patient"
+
+
+@pytest.mark.parametrize(
+    ("hour", "minute", "expected"),
+    [(17, 45, False), (18, 0, True)],
+)
+def test_arlington_is_found_by_name_and_shares_the_fairview_cutoff(
+    hour: int, minute: int, expected: bool
+) -> None:
+    # Whatever id the clinics table gives it: the name decides.
+    data = make_data(
+        clinic_id=37,
+        clinic_name="ScanX Arlington",
+        appointment_datetime=datetime(2026, 10, 6, hour, minute),
+    )
+
+    assert _show_admit_button(data) is expected
+
+
+def test_each_clinic_posts_to_its_own_chat_space(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "gchat_webhook_dallas", "https://chat/dallas")
+    monkeypatch.setattr(settings, "gchat_webhook_fairview", "https://chat/fairview")
+    monkeypatch.setattr(settings, "gchat_webhook_arlington", "https://chat/arlington")
+
+    assert _webhook_for_clinic(make_data(clinic_id=37, clinic_name="ScanX Arlington")).endswith(
+        "arlington"
+    )
+    assert _webhook_for_clinic(make_data(clinic_id=1)).endswith("dallas")
+    assert _webhook_for_clinic(make_data(clinic_id=2, clinic_name="Fairview")).endswith("fairview")
+
+
+def test_an_unknown_clinic_or_missing_webhook_is_reported(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "gchat_webhook_arlington", None)
+
+    with pytest.raises(RuntimeError, match="not configured for Arlington"):
+        _webhook_for_clinic(make_data(clinic_id=37, clinic_name="ScanX Arlington"))
+
+    with pytest.raises(RuntimeError, match="No Google Chat routing"):
+        _webhook_for_clinic(make_data(clinic_id=99, clinic_name="Somewhere"))

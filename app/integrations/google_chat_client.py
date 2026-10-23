@@ -51,6 +51,10 @@ class PatientCheckedInCardData:
 
     previous_report_url: str | None
 
+    # The clinic's name from the clinics table: decides the Chat space and the
+    # after-hours rule, so a new clinic needs no code for its id.
+    clinic_name: str | None = None
+
 
 class GoogleChatApiError(Exception):
     def __init__(self, message: str) -> None:
@@ -58,22 +62,40 @@ class GoogleChatApiError(Exception):
         self.message = message
 
 
-def _webhook_for_clinic(
-    clinic_id: int | None,
-) -> str:
-    if clinic_id == 1:
-        if not settings.gchat_webhook_dallas:
-            raise RuntimeError("Google Chat webhook is not configured for Dallas.")
+# Clinics are told apart by the place in their name ("ScanX Dallas"), not by
+# their id, so a new clinic only needs its webhook and an entry here. The ids
+# are the fallback when no name is known.
+_LEGACY_CLINIC_IDS = {1: "dallas", 2: "fairview"}
 
-        return settings.gchat_webhook_dallas
+# The time of day from which "Admit patient" is shown (minutes after midnight).
+_AFTER_HOURS_FROM = {
+    "dallas": 17 * 60 + 30,
+    "fairview": 18 * 60,
+    "arlington": 18 * 60,
+}
 
-    if clinic_id == 2:
-        if not settings.gchat_webhook_fairview:
-            raise RuntimeError("Google Chat webhook is not configured for Fairview.")
 
-        return settings.gchat_webhook_fairview
+def _clinic_key(data: PatientCheckedInCardData) -> str | None:
+    name = (data.clinic_name or "").lower()
 
-    raise RuntimeError(f"No Google Chat routing is configured for clinic_id={clinic_id}.")
+    for key in _AFTER_HOURS_FROM:
+        if key in name:
+            return key
+
+    return _LEGACY_CLINIC_IDS.get(data.clinic_id) if data.clinic_id is not None else None
+
+
+def _webhook_for_clinic(data: PatientCheckedInCardData) -> str:
+    key = _clinic_key(data)
+    webhook = getattr(settings, f"gchat_webhook_{key}", None) if key else None
+
+    if key is None:
+        raise RuntimeError(f"No Google Chat routing is configured for clinic_id={data.clinic_id}.")
+
+    if not webhook:
+        raise RuntimeError(f"Google Chat webhook is not configured for {key.title()}.")
+
+    return webhook
 
 
 def _display(
@@ -116,8 +138,8 @@ def _show_admit_button(
 ) -> bool:
     """
     "Admit patient" is shown only for appointments outside normal hours:
-    weekends, 8:30 AM or earlier, Dallas at/after 5:30 PM, and Fairview
-    at/after 6:00 PM. Evaluated in the clinic's local time.
+    weekends, 8:30 AM or earlier, Dallas at/after 5:30 PM, and Fairview and
+    Arlington at/after 6:00 PM. Evaluated in the clinic's local time.
     """
     if data.appointment_datetime is None:
         return False
@@ -131,10 +153,10 @@ def _show_admit_button(
 
     is_weekend = local.weekday() >= 5
     is_before_8_30 = total_minutes <= 8 * 60 + 30
-    is_dallas_after_5_30 = data.clinic_id == 1 and total_minutes >= 17 * 60 + 30
-    is_fairview_after_6 = data.clinic_id == 2 and total_minutes >= 18 * 60
+    after_hours_from = _AFTER_HOURS_FROM.get(_clinic_key(data) or "")
+    is_after_hours = after_hours_from is not None and total_minutes >= after_hours_from
 
-    return is_weekend or is_before_8_30 or is_dallas_after_5_30 or is_fairview_after_6
+    return is_weekend or is_before_8_30 or is_after_hours
 
 
 def _button_list(
@@ -349,7 +371,7 @@ def _build_card(
 def send_patient_checked_in_card(
     data: PatientCheckedInCardData,
 ) -> None:
-    webhook_url = _webhook_for_clinic(data.clinic_id)
+    webhook_url = _webhook_for_clinic(data)
 
     card = _build_card(data)
 
