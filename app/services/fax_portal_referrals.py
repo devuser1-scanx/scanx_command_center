@@ -266,7 +266,9 @@ def move_referral(
             raise InvalidMoveError("Confirm moving this referral to Fax Provider Name Pending.")
 
     elif to_status == DIDNT_RESPOND:
-        if from_status != FAX_PENDING:
+        # Automatic on the 5th qualifying call, from the working columns;
+        # otherwise only after the physician has been faxed.
+        if from_status != FAX_PENDING and not (source == "call_result" and from_status in WORKING):
             raise InvalidMoveError(
                 "Only referrals in Fax Provider Name Pending can move to Didn't Respond."
             )

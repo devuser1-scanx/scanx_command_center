@@ -509,7 +509,7 @@ def test_a_second_miss_in_follow_up_stays_there_and_counts(
     assert attempts == [1, 2]
 
 
-def test_the_fifth_qualifying_miss_moves_the_card_to_fax_provider_name_pending(
+def test_the_fifth_qualifying_miss_closes_the_card_as_didnt_respond(
     client: TestClient, db_session: Session, staff: Any
 ) -> None:
     card = worked_card(
@@ -519,8 +519,8 @@ def test_the_fifth_qualifying_miss_moves_the_card_to_fax_provider_name_pending(
 
     body = call_and_record(client, headers, card.id, result="no_answer").json()
 
-    assert body["status"] == "fax_provider_name_pending"
-    assert body["moved_to"] == "fax_provider_name_pending"
+    assert body["status"] == "didnt_respond"
+    assert body["moved_to"] == "didnt_respond"
     assert (body["qualifying_call_count"], body["call_limit_reached"]) == (5, True)
     db_session.refresh(card)
     # Out of calls: nothing is scheduled any more.
@@ -528,6 +528,7 @@ def test_the_fifth_qualifying_miss_moves_the_card_to_fax_provider_name_pending(
 
     after = case(client, headers, card.id)
     assert after["can_call"] is False
+    assert "calls have been made" in after["call_blocked_reason"]
     assert start_call(client, headers, card.id).status_code == 422
 
 
@@ -752,7 +753,7 @@ def test_an_other_that_counts_can_be_the_fifth_call(
         counts_toward_limit=True,
     ).json()
 
-    assert body["status"] == "fax_provider_name_pending"
+    assert body["status"] == "didnt_respond"
 
 
 def test_only_other_can_override_whether_a_call_counts(

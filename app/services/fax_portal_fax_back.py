@@ -330,7 +330,9 @@ def send_fax_back(
 
     status_row = db.get(CCFpStatus, card.status)
 
-    if status_row is not None and not status_row.is_open:
+    # Didn't Respond is closed, but it is where a referral lands after the fifth
+    # call: the physician is faxed from there.
+    if status_row is not None and not status_row.is_open and card.status != DIDNT_RESPOND:
         raise FaxBackError("This referral is closed.")
 
     if payload.mark_didnt_respond and card.status != FAX_PENDING:

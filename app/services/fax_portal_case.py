@@ -45,6 +45,7 @@ from app.services.fax_portal_activity import log_activity
 from app.services.fax_portal_board import _full_name, _initials
 from app.services.fax_portal_referrals import (
     DECLINED,
+    DIDNT_RESPOND,
     FAX_PENDING,
     REVIEW,
     WORKING,
@@ -156,7 +157,9 @@ def call_block_reason(db: Session, card: R) -> str | None:
     if card.status == REVIEW:
         return "Release this referral from Intake Review before calling."
 
-    if card.status == FAX_PENDING:
+    if card.status == FAX_PENDING or (
+        card.status == DIDNT_RESPOND and card.qualifying_call_count >= CALL_LIMIT
+    ):
         return f"All {CALL_LIMIT} calls have been made."
 
     if card.status not in WORKING:
@@ -749,7 +752,9 @@ def record_call_result(
     target: str | None = None
 
     if limit_reached and card.status in WORKING:
-        target = FAX_PENDING
+        # Out of calls: the case is closed as Didn't Respond. The referring
+        # physician can still be faxed from there.
+        target = DIDNT_RESPOND
     elif result.next_status:
         target = result.next_status
 

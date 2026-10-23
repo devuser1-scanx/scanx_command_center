@@ -392,7 +392,7 @@ def test_incomplete_requests_are_refused(
     assert email.sent == []
 
 
-@pytest.mark.parametrize("status", ["review_required", "appointment_booked", "didnt_respond"])
+@pytest.mark.parametrize("status", ["review_required", "appointment_booked", "not_referral"])
 def test_referrals_in_review_or_closed_cannot_be_faxed_back(
     client: TestClient, db_session: Session, agent: Any, email: FakeEmail, status: str
 ) -> None:
@@ -519,3 +519,17 @@ def test_a_bucket_failure_is_reported_and_nothing_is_sent(
 
     assert response.status_code == 502
     assert email.sent == []
+
+
+def test_a_referral_closed_as_didnt_respond_can_still_be_faxed_back(
+    client: TestClient, db_session: Session, agent: Any, email: FakeEmail
+) -> None:
+    card = unreachable(db_session, agent, status="didnt_respond")
+
+    assert draft(client, agent, card)["can_mark_didnt_respond"] is False
+
+    response = send(client, agent, card)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["moved_to"] is None
+    assert len(email.sent) == 1
