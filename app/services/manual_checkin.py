@@ -234,6 +234,7 @@ def _send_google_chat_best_effort(
     *,
     appointment: Appointment,
     clinic_timezone: str | None,
+    clinic_name: str | None = None,
     checked_in_at: datetime | None,
 ) -> str:
     try:
@@ -255,6 +256,7 @@ def _send_google_chat_best_effort(
         card_data = PatientCheckedInCardData(
             clinic_id=(appointment.clinic_id),
             clinic_timezone=(clinic_timezone),
+            clinic_name=clinic_name,
             last_name=(appointment.last_name),
             first_name=(appointment.first_name),
             appointment_id=(appointment.appointment_id),
@@ -637,6 +639,7 @@ def manual_check_in_patient(
         prod_db,
         appointment=appointment,
         clinic_timezone=(clinic.timezone if clinic else None),
+        clinic_name=location,
         checked_in_at=(checked_in_at),
     )
 

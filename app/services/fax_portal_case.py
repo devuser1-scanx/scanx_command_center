@@ -45,6 +45,7 @@ from app.services.fax_portal_activity import log_activity
 from app.services.fax_portal_board import _full_name, _initials
 from app.services.fax_portal_referrals import (
     DECLINED,
+    DIDNT_RESPOND,
     FAX_PENDING,
     REVIEW,
     WORKING,
@@ -156,7 +157,9 @@ def call_block_reason(db: Session, card: R) -> str | None:
     if card.status == REVIEW:
         return "Release this referral from Intake Review before calling."
 
-    if card.status == FAX_PENDING:
+    if card.status == FAX_PENDING or (
+        card.status == DIDNT_RESPOND and card.qualifying_call_count >= CALL_LIMIT
+    ):
         return f"All {CALL_LIMIT} calls have been made."
 
     if card.status not in WORKING:
@@ -262,7 +265,7 @@ def _load_card(db: Session, referral_id: int) -> R:
 
 
 def _call_source(call: CCFpCallLog) -> str:
-    """"twilio" for a call placed from the browser (it has a Twilio call id once
+    """ "twilio" for a call placed from the browser (it has a Twilio call id once
     Twilio has picked it up, and is "starting" before that), "manual" for one an
     agent logged after calling another way."""
     return "twilio" if (call.twilio_call_sid or call.twilio_status == STARTING) else "manual"
@@ -320,7 +323,7 @@ def get_case(db: Session, referral_id: int) -> CaseDetailResponse:
             select(CCFpActivityLog)
             .where(
                 CCFpActivityLog.referral_id == card.id,
-                CCFpActivityLog.action.in_(["edit_field", "reassign", "do_not_call"]),
+                CCFpActivityLog.action.in_(["edit_field", "reassign", "do_not_call", "fax_back"]),
             )
             .order_by(CCFpActivityLog.occurred_at.asc(), CCFpActivityLog.id.asc())
         )
@@ -419,6 +422,7 @@ def get_case(db: Session, referral_id: int) -> CaseDetailResponse:
             physician_name=card.physician_name,
             physician_fax_no=card.physician_fax_no,
             physician_email=card.physician_email,
+            address=card.address,
             reason=card.reason,
             reason_other=card.reason_other,
         ),
@@ -585,6 +589,16 @@ def _timeline(
                     actor=person(e.user_id),
                 )
             )
+        elif e.action == "fax_back":
+            events.append(
+                TimelineEvent(
+                    at=e.occurred_at,
+                    kind="edit",
+                    title="Faxed the referring provider",
+                    detail="Unable to reach the patient",
+                    actor=person(e.user_id),
+                )
+            )
 
     events.sort(key=lambda event: event.at, reverse=True)
 
@@ -715,9 +729,6 @@ def record_call_result(
     if result.code == "callback_requested" and payload.callback_at is None:
         raise InvalidMoveError("Pick when the patient asked to be called back.")
 
-    if result.code == "booked" and appointment_id is None:
-        raise InvalidMoveError("Pick the Acuity appointment the patient booked.")
-
     counts = bool(payload.counts_toward_limit) if is_other else result.counts_toward_limit_default
 
     if counts and card.qualifying_call_count >= CALL_LIMIT:
@@ -741,7 +752,9 @@ def record_call_result(
     target: str | None = None
 
     if limit_reached and card.status in WORKING:
-        target = FAX_PENDING
+        # Out of calls: the case is closed as Didn't Respond. The referring
+        # physician can still be faxed from there.
+        target = DIDNT_RESPOND
     elif result.next_status:
         target = result.next_status
 

@@ -125,8 +125,13 @@ def test_text_window_is_eight_to_nine_clinic_time(hour: int, expected: bool) -> 
 
 
 def test_case_has_the_booking_form_fields_and_outreach(
-    client: TestClient, db_session: Session, staff: Any
+    client: TestClient,
+    db_session: Session,
+    staff: Any,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Whether click-to-call is set up depends on the environment: not here.
+    monkeypatch.setattr(fax_portal_case.settings, "twilio_twiml_app_sid", None)
     card = make_card(
         db_session,
         first_name="Maria",
@@ -288,14 +293,14 @@ def test_edits_in_the_case_are_audited_as_referral_case(
             "row_version": 1,
             "first_name": "Maria",
             "email": "maria@example.com",
-            "reason": "Abdominal pain",
+            "gender": "Female",
             "reason_other": "",
         },
         headers=headers,
     )
 
     assert response.status_code == 200
-    assert response.json()["changed_fields"] == ["email", "first_name", "reason"]
+    assert response.json()["changed_fields"] == ["email", "first_name", "gender"]
 
     entry = db_session.scalars(
         select(CCFpActivityLog).where(
@@ -504,7 +509,7 @@ def test_a_second_miss_in_follow_up_stays_there_and_counts(
     assert attempts == [1, 2]
 
 
-def test_the_fifth_qualifying_miss_moves_the_card_to_fax_provider_name_pending(
+def test_the_fifth_qualifying_miss_closes_the_card_as_didnt_respond(
     client: TestClient, db_session: Session, staff: Any
 ) -> None:
     card = worked_card(
@@ -514,8 +519,8 @@ def test_the_fifth_qualifying_miss_moves_the_card_to_fax_provider_name_pending(
 
     body = call_and_record(client, headers, card.id, result="no_answer").json()
 
-    assert body["status"] == "fax_provider_name_pending"
-    assert body["moved_to"] == "fax_provider_name_pending"
+    assert body["status"] == "didnt_respond"
+    assert body["moved_to"] == "didnt_respond"
     assert (body["qualifying_call_count"], body["call_limit_reached"]) == (5, True)
     db_session.refresh(card)
     # Out of calls: nothing is scheduled any more.
@@ -523,6 +528,7 @@ def test_the_fifth_qualifying_miss_moves_the_card_to_fax_provider_name_pending(
 
     after = case(client, headers, card.id)
     assert after["can_call"] is False
+    assert "calls have been made" in after["call_blocked_reason"]
     assert start_call(client, headers, card.id).status_code == 422
 
 
@@ -646,14 +652,29 @@ def test_wrong_number_goes_to_exception(
     assert (body["status"], body["counts_toward_limit"]) == ("exception", False)
 
 
-def test_booked_needs_the_acuity_appointment_and_records_the_booking(
+def test_booked_is_recorded_without_asking_for_the_appointment(
     client: TestClient, db_session: Session, staff: Any
 ) -> None:
     card = worked_card(db_session)
     headers = auth_headers(client, staff)
     call_id = start_call(client, headers, card.id).json()["call_id"]
 
-    assert record(client, headers, call_id, result="booked").status_code == 422
+    response = record(client, headers, call_id, result="booked")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "appointment_booked"
+    db_session.refresh(card)
+    # The appointment is linked afterwards, not typed in by the agent.
+    assert (card.acuity_appointment_id, card.booked_source) == (None, "agent")
+    assert card.booked_by_user_id == staff.id
+
+
+def test_booked_still_records_an_appointment_when_one_is_given(
+    client: TestClient, db_session: Session, staff: Any
+) -> None:
+    card = worked_card(db_session)
+    headers = auth_headers(client, staff)
+    call_id = start_call(client, headers, card.id).json()["call_id"]
 
     body = record(client, headers, call_id, result="booked", acuity_appointment_id="APPT-1").json()
 
@@ -732,7 +753,7 @@ def test_an_other_that_counts_can_be_the_fifth_call(
         counts_toward_limit=True,
     ).json()
 
-    assert body["status"] == "fax_provider_name_pending"
+    assert body["status"] == "didnt_respond"
 
 
 def test_only_other_can_override_whether_a_call_counts(

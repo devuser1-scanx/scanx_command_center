@@ -121,6 +121,7 @@ def create_refresh_token(
     *,
     subject: str,
     expires_delta: timedelta | None = None,
+    auth_at: datetime | None = None,
 ) -> str:
     """Session identity is never carried in this token - validity is
     determined entirely by looking up hash_token(token) against
@@ -143,6 +144,9 @@ def create_refresh_token(
         "jti": str(uuid4()),
         "iss": JWT_ISSUER,
         "aud": JWT_AUDIENCE,
+        # When the user actually signed in. Every refresh carries it forward, so
+        # the session's maximum length counts from the login, not the last refresh.
+        "auth_at": int((auth_at or now).timestamp()),
     }
 
     return jwt.encode(

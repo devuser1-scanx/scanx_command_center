@@ -35,6 +35,7 @@ from app.schemas.fax_portal import (
 )
 from app.services.fax_portal_activity import log_activity
 from app.services.fax_portal_board import _full_name, _initials
+from app.services.fax_portal_geo import MAX_SUGGEST_MILES, rank_clinics
 from app.services.fax_portal_matching import suggest_clinic, suggest_exams
 from app.services.fax_portal_referrals import (
     REVIEW,
@@ -58,6 +59,7 @@ TEXT_FIELDS = (
     "physician_name",
     "physician_fax_no",
     "physician_email",
+    "address",
 )
 
 
@@ -213,18 +215,31 @@ def _suggestions(
 
     clinic: ClinicSuggestion | None = None
 
+    calendars = [
+        (c.acuity_calendar_id, c.name, c.location)
+        for c in db.scalars(
+            select(CCFpAcuityCalendar).where(CCFpAcuityCalendar.is_active.is_(True))
+        )
+    ]
+
+    # How far each clinic is from the patient's address (ZIP code to ZIP code),
+    # worked out on this server: the address is not sent anywhere.
+    distances = rank_clinics(card.address, calendars) or []
+
     if card.acuity_calendar_id is None:
-        calendars = [
-            (c.acuity_calendar_id, c.name)
-            for c in db.scalars(
-                select(CCFpAcuityCalendar).where(CCFpAcuityCalendar.is_active.is_(True))
-            )
-        ]
-        match = suggest_clinic(texts, calendars)
+        # A clinic the fax itself names wins; otherwise the nearest one.
+        match = suggest_clinic(texts, [(cid, name) for cid, name, _ in calendars])
 
         if match:
             clinic = ClinicSuggestion(
                 acuity_calendar_id=match.calendar_id, name=match.name, reason=match.reason
+            )
+        elif distances and distances[0].miles <= MAX_SUGGEST_MILES:
+            nearest = distances[0]
+            clinic = ClinicSuggestion(
+                acuity_calendar_id=nearest.acuity_calendar_id,
+                name=nearest.name,
+                reason=f"Nearest to the patient's address (about {round(nearest.miles)} mi)",
             )
 
     chosen_ids = {e.acuity_appointment_type_id for e in exams.values()}
@@ -249,7 +264,12 @@ def _suggestions(
                 fax_text=match.fax_text or None,
             )
 
-    return IntakeSuggestions(clinic=clinic, exam_1=suggested.get(1), exam_2=suggested.get(2))
+    return IntakeSuggestions(
+        clinic=clinic,
+        exam_1=suggested.get(1),
+        exam_2=suggested.get(2),
+        clinic_distances=distances,
+    )
 
 
 def get_intake_detail(db: Session, referral_id: int) -> IntakeDetailResponse:
@@ -263,6 +283,11 @@ def get_intake_detail(db: Session, referral_id: int) -> IntakeDetailResponse:
         )
     )
     exams = _exam_choices(db, card.id)
+    patient_idx = (
+        db.scalar(select(CCFpFaxPatient.idx).where(CCFpFaxPatient.id == card.fax_patient_id))
+        if card.fax_patient_id
+        else None
+    )
 
     return IntakeDetailResponse(
         id=card.id,
@@ -281,6 +306,9 @@ def get_intake_detail(db: Session, referral_id: int) -> IntakeDetailResponse:
             physician_name=card.physician_name,
             physician_fax_no=card.physician_fax_no,
             physician_email=card.physician_email,
+            address=card.address,
+            reason=card.reason,
+            reason_other=card.reason_other,
         ),
         clinic=(
             ClinicChoice(
@@ -308,6 +336,10 @@ def get_intake_detail(db: Session, referral_id: int) -> IntakeDetailResponse:
                     doc_type=d.doc_type,
                     page_start=d.page_start,
                     page_end=d.page_end,
+                    summary=d.summary,
+                    for_patient=(
+                        d.patient_idx is None or patient_idx is None or d.patient_idx == patient_idx
+                    ),
                 )
                 for d in documents
             ],
@@ -446,6 +478,8 @@ def update_intake(
                 record,
             )
 
+    _apply_reason_rules(db, card, provided, record)
+
     if not changes:
         return card, []
 
@@ -467,6 +501,62 @@ def update_intake(
     db.flush()
 
     return card, sorted(changes)
+
+
+def _exam_1_reason_options(db: Session, referral_id: int) -> list[str]:
+    """The "Reason for the appointment" options of the referral's Exam 1 (empty
+    when there is no Exam 1 or Acuity gives it none)."""
+    options = db.scalar(
+        select(CCFpAcuityAppointmentType.reason_options)
+        .join(
+            CCFpReferralExam,
+            CCFpReferralExam.acuity_appointment_type_id
+            == CCFpAcuityAppointmentType.acuity_appointment_type_id,
+        )
+        .where(CCFpReferralExam.referral_id == referral_id, CCFpReferralExam.slot == 1)
+    )
+
+    return list(options or [])
+
+
+def _apply_reason_rules(db: Session, card: R, provided: set[str], record: Any) -> None:
+    """The reason must be one of Exam 1's Acuity options; "Other" needs the text
+    beside it. The text box (`reason_other`) is always open and is kept whatever
+    the reason is. Changing Exam 1 drops a reason the new exam does not offer."""
+    exam_changed = "exam_1_id" in provided
+    reason_edited = "reason" in provided
+
+    if not (exam_changed or reason_edited or "reason_other" in provided):
+        return
+
+    # The exam change above is read back below.
+    db.flush()
+    options = _exam_1_reason_options(db, card.id)
+
+    if card.reason is not None:
+        offered = next((o for o in options if o.casefold() == card.reason.casefold()), None)
+
+        if offered is not None:
+            card.reason = offered
+        elif exam_changed and not reason_edited:
+            record("reason", card.reason, None)
+            card.reason = None
+        elif not options:
+            has_exam = db.scalar(
+                select(CCFpReferralExam.id).where(
+                    CCFpReferralExam.referral_id == card.id, CCFpReferralExam.slot == 1
+                )
+            )
+            raise InvalidMoveError(
+                "That exam has no reason options."
+                if has_exam
+                else "Choose Exam 1 before choosing a reason."
+            )
+        else:
+            raise InvalidMoveError("Choose one of the reasons offered for this exam.")
+
+    if (card.reason or "").casefold() == "other" and _clean(card.reason_other) is None:
+        raise InvalidMoveError("Say what the Other reason is.")
 
 
 def _jsonable(value: Any) -> Any:

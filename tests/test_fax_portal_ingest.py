@@ -145,6 +145,8 @@ def test_sample_fax_creates_everything(db_session: Session) -> None:
     assert card.first_viewed_at is None  # shows the NEW tag
     assert (card.first_name, card.last_name) == ("John", "Doe")
     assert card.gender == "Male"
+    # The patient's address is copied from the fax's "PHI Address".
+    assert card.address == "XXX Test St, Test TX XXXXX-XXXX"
     assert card.physician_name == "Doctor Order, MD"
     assert card.physician_fax_no == "214-555-0102"
     assert card.fax_patient_id is not None

@@ -548,6 +548,9 @@ def test_templates_are_filled_from_the_referral(
         "booking_link_es",
         "missed_call_en",
         "callback_confirmation_en",
+        "follow_up_day_3_en",
+        "follow_up_day_6_en",
+        "follow_up_day_9_en",
     }
     english = by_code["booking_link_en"]
     assert english["missing"] == []
@@ -557,8 +560,18 @@ def test_templates_are_filled_from_the_referral(
         "https://app.acuityscheduling.com/schedule.php?owner=1&appointmentType=9" in english["body"]
     )
     assert "calendarID=" in english["body"] and "firstName=Maria" in english["body"]
-    # Every template carries the opt-out line.
-    assert all("STOP" in t["body"] for t in templates)
+    # Every first-contact template carries the opt-out line. The follow-up texts
+    # (days 3, 6, 9) are the supplied wording, which does not include it.
+    follow_ups = {code for code in by_code if code.startswith("follow_up_")}
+    assert all("STOP" in t["body"] for t in templates if t["code"] not in follow_ups)
+
+    # The follow-ups are filled in with the patient's first name and need no link.
+    for code in follow_ups:
+        assert by_code[code]["missing"] == [] and "Maria" in by_code[code]["body"]
+        assert "{" not in by_code[code]["body"]
+    assert "(469) 804-6999" in by_code["follow_up_day_3_en"]["body"]
+    assert "Reply YES" in by_code["follow_up_day_6_en"]["body"]
+    assert "final follow-up" in by_code["follow_up_day_9_en"]["body"]
 
 
 def test_details_that_are_not_known_stay_as_placeholders(

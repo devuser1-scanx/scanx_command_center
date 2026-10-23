@@ -46,6 +46,10 @@ SOURCES = {
     "scheduler",
 }
 
+# Sources that may mark a referral Appointment Booked without an Acuity
+# appointment id (it is linked afterwards).
+ID_NOT_NEEDED_SOURCES = {"nightly_check", "call_result", "button"}
+
 # cc_fp_referral_board.booked_source for each history source.
 BOOKED_SOURCE = {
     "button": "agent",
@@ -221,7 +225,10 @@ def move_referral(
 
         appointment_id = (extra.acuity_appointment_id or "").strip()
 
-        if not appointment_id and source != "nightly_check":
+        # An agent marking a referral booked (from the case page or a call
+        # result) is not asked for the appointment: it is linked later. Only a
+        # drag on the board, which has no other trace of the booking, needs it.
+        if not appointment_id and source not in ID_NOT_NEEDED_SOURCES:
             raise InvalidMoveError("Pick the Acuity appointment this patient booked.")
 
         if appointment_id:
@@ -259,7 +266,9 @@ def move_referral(
             raise InvalidMoveError("Confirm moving this referral to Fax Provider Name Pending.")
 
     elif to_status == DIDNT_RESPOND:
-        if from_status != FAX_PENDING:
+        # Automatic on the 5th qualifying call, from the working columns;
+        # otherwise only after the physician has been faxed.
+        if from_status != FAX_PENDING and not (source == "call_result" and from_status in WORKING):
             raise InvalidMoveError(
                 "Only referrals in Fax Provider Name Pending can move to Didn't Respond."
             )

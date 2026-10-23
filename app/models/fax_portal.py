@@ -145,6 +145,14 @@ class CCFpAcuityAppointmentType(Base):
     description: Mapped[str | None] = mapped_column(Text)
     scheduling_url: Mapped[str | None] = mapped_column(Text)
     is_private: Mapped[bool | None] = mapped_column(Boolean)
+    # The intake form that holds this exam's "Reason for the appointment"
+    # dropdown, that field's id, and its options in Acuity's order (filled by
+    # the Acuity sync from GET /forms).
+    acuity_form_id: Mapped[int | None] = mapped_column(BigInteger)
+    reason_field_id: Mapped[int | None] = mapped_column(BigInteger)
+    reason_options: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     raw: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
@@ -507,6 +515,9 @@ class CCFpReferralBoard(Base):
     email: Mapped[str | None] = mapped_column(String(150))
     gender: Mapped[str | None] = mapped_column(String(10))
     dob: Mapped[date | None] = mapped_column(Date)
+    # The patient's address: copied from the fax ("PHI Address") when the card is
+    # created, then correctable in Intake Review. Not an Acuity booking-form field.
+    address: Mapped[str | None] = mapped_column(Text)
     acuity_calendar_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("cc_fp_acuity_calendar.acuity_calendar_id")
     )

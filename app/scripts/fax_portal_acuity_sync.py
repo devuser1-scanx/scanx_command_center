@@ -3,7 +3,11 @@ from __future__ import annotations
 import sys
 
 from app.db.session import SessionLocal
-from app.services.fax_portal_acuity import SyncAlreadyRunningError, run_acuity_sync
+from app.services.fax_portal_acuity import (
+    SyncAlreadyRunningError,
+    exams_without_reasons,
+    run_acuity_sync,
+)
 
 # Entry point for the hourly Cloud Run job "fax-portal-acuity-sync":
 #   python -m app.scripts.fax_portal_acuity_sync
@@ -29,6 +33,9 @@ def main() -> int:
             f"calendars +{run.calendars_added} ~{run.calendars_updated} -{run.calendars_removed}, "
             f"types +{run.types_added} ~{run.types_updated} -{run.types_removed}"
         )
+
+        without = exams_without_reasons(db)
+        print(f"Exams without reason options ({len(without)}): " + "; ".join(without))
 
         return 0
 
