@@ -1,5 +1,5 @@
 # GHSA-6v7p-g79w-8964 – msgpack vendored *inside pip itself* (pip/_vendor/msgpack)
-# for pip's own HTTP cache. Not our app's msgpack dep (pinned to 1.2.1, already clean).
+# for pip's own HTTP cache. Not our app's msgpack dep (pinned in requirements.txt, already clean).
 # Not reachable at runtime — the app never imports pip.
 GHSA-6v7p-g79w-8964
 
