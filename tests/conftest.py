@@ -64,6 +64,7 @@ PERMISSIONS = [
     ("users.deactivate", "users", "Deactivate Users"),
     ("users.assign_role", "users", "Assign User Roles"),
     ("users.assign_clinic", "users", "Assign User Clinics"),
+    ("users.delete", "users", "Delete Users"),
     ("roles.view", "roles", "View Roles"),
     ("roles.manage", "roles", "Manage Roles"),
     ("clinics.view", "clinics", "View Clinics"),
@@ -86,7 +87,36 @@ PERMISSIONS = [
     ("settings.view", "settings", "View Settings"),
     ("settings.manage", "settings", "Manage Settings"),
     ("audit.view", "audit", "View Audit Logs"),
+    ("patients.fax", "patients", "Send Patient Faxes"),
+    ("patients.mail", "patients", "Send Patient Emails"),
+    ("patients.sms", "patients", "Send Patient SMS"),
+    ("fax_portal.access", "fax_portal", "Access FAX Portal"),
 ]
+
+# The module permissions each non-admin role holds - mirrors migration 0019
+# (Admin holds every permission).
+MODULE_PERMISSIONS = {
+    "dashboard": ["dashboard.view", "clinics.view"],
+    "messages": ["messages.view", "messages.send"],
+    "calls": ["calls.view", "calls.create"],
+    "reports": ["reports.view", "reports.manage"],
+    "patients": [
+        "patients.search",
+        "patients.view",
+        "patients.fax",
+        "patients.mail",
+        "patients.sms",
+        "appointments.view",
+        "appointments.update",
+        "clinics.view",
+    ],
+    "fax_portal": ["fax_portal.access"],
+}
+
+ROLE_MODULES = {
+    "sales": ["dashboard", "messages", "calls", "reports", "patients", "fax_portal"],
+    "sonographer": ["dashboard", "messages", "calls", "reports", "patients"],
+}
 
 
 def ensure_role(
@@ -165,23 +195,18 @@ def seed_auth_catalog(
         name="Admin",
     )
 
-    ensure_role(
-        db,
-        code="front_desk",
-        name="Front Desk",
-    )
-
-    sonographer_role = ensure_role(
-        db,
-        code="sonographer",
-        name="Sonographer",
-    )
-
-    ensure_role(
-        db,
-        code="sales",
-        name="Sales",
-    )
+    roles = {
+        "sonographer": ensure_role(
+            db,
+            code="sonographer",
+            name="Sonographer",
+        ),
+        "sales": ensure_role(
+            db,
+            code="sales",
+            name="Sales Agent",
+        ),
+    }
 
     permission_map: dict[
         str,
@@ -204,15 +229,17 @@ def seed_auth_catalog(
             permission=permission,
         )
 
-    for code in (
-        "patients.search",
-        "patients.view",
-    ):
-        ensure_role_permission(
-            db,
-            role=sonographer_role,
-            permission=permission_map[code],
-        )
+    for role_code, modules in ROLE_MODULES.items():
+        # A set: clinics.view belongs to more than one module, and the session
+        # does not autoflush, so a repeat would queue a duplicate row.
+        codes = {code for module in modules for code in MODULE_PERMISSIONS[module]}
+
+        for code in sorted(codes):
+            ensure_role_permission(
+                db,
+                role=roles[role_code],
+                permission=permission_map[code],
+            )
 
     db.flush()
 
@@ -357,8 +384,8 @@ def admin_password() -> str:
 
 
 @pytest.fixture
-def front_desk_password() -> str:
-    return "FrontDeskPass@123"
+def sales_password() -> str:
+    return "SalesAgentPass@123"
 
 
 @pytest.fixture
@@ -405,17 +432,17 @@ def sonographer_user(
 
 
 @pytest.fixture
-def front_desk_user(
+def sales_user(
     db_session: Session,
-    front_desk_password: str,
+    sales_password: str,
 ) -> CCUser:
     user = create_test_user(
         db_session,
-        email="frontdesk@example.com",
-        password=front_desk_password,
-        role_code="front_desk",
-        first_name="Front",
-        last_name="Desk",
+        email="sales@example.com",
+        password=sales_password,
+        role_code="sales",
+        first_name="Sales",
+        last_name="Agent",
     )
 
     db_session.commit()

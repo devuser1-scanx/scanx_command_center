@@ -89,6 +89,15 @@ class Settings(BaseSettings):
     twilio_api_key_secret: str | None = None
     twilio_twiml_app_sid: str | None = None
 
+    # Calls module (the Web Dialer). Its browser tokens name the standalone Web
+    # Dialer's own TwiML App (kept apart from the Fax Portal's, above), so Twilio
+    # asks the standalone service what to do with each call: that service dials,
+    # records, logs the call in the production call_logs / dialer_call_* tables and
+    # sends the missed-call alerts, exactly as it does for its own frontend.
+    # Command Center adds its own record of who placed each call and reads the
+    # shared tables. Unset: Calls answers 503.
+    dialer_twiml_app_sid: str | None = None
+
     # Payment-reminder Content Template triggered after successful check-in.
     #
     # Content variables:

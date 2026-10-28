@@ -552,11 +552,8 @@ def make_role_user(db: Session, role: str, *, is_active: bool = True) -> CCUser:
     return user
 
 
-@pytest.mark.parametrize("role", ["sales", "front_desk"])
-def test_sales_and_front_desk_users_are_assignable_without_an_agent_row(
-    db_session: Session, fax_id: int, role: str
-) -> None:
-    user = make_role_user(db_session, role)
+def test_sales_users_are_assignable_without_an_agent_row(db_session: Session, fax_id: int) -> None:
+    user = make_role_user(db_session, "sales")
     assert db_session.get(CCFpAgent, user.id) is None
 
     card = new_card(db_session, fax_id)
@@ -582,7 +579,7 @@ def test_other_roles_are_never_assigned(db_session: Session, fax_id: int, role: 
 def test_a_stale_agent_row_without_the_role_is_ignored(db_session: Session, fax_id: int) -> None:
     # Has a cc_fp_agent row (e.g. from before) but no longer holds the role.
     stale = make_agent(db_session, role="sonographer")
-    holder = make_role_user(db_session, "front_desk")
+    holder = make_role_user(db_session, "sales")
 
     assert db_session.get(CCFpAgent, stale.id) is not None
     assert assign_new_referral(db_session, new_card(db_session, fax_id)) == holder.id
@@ -590,14 +587,14 @@ def test_a_stale_agent_row_without_the_role_is_ignored(db_session: Session, fax_
 
 def test_inactive_role_holders_are_skipped(db_session: Session, fax_id: int) -> None:
     make_role_user(db_session, "sales", is_active=False)
-    active = make_role_user(db_session, "front_desk")
+    active = make_role_user(db_session, "sales")
 
     assert assign_new_referral(db_session, new_card(db_session, fax_id)) == active.id
 
 
 def test_role_holders_share_load_without_any_setup(db_session: Session, fax_id: int) -> None:
     a = make_role_user(db_session, "sales")
-    b = make_role_user(db_session, "front_desk")
+    b = make_role_user(db_session, "sales")
 
     picks = [
         assign_new_referral(db_session, new_card(db_session, fax_id, status="ready_for_contact"))
@@ -610,7 +607,7 @@ def test_role_holders_share_load_without_any_setup(db_session: Session, fax_id: 
 
 def test_pausing_through_the_settings_row_still_works(db_session: Session, fax_id: int) -> None:
     paused = make_role_user(db_session, "sales")
-    working = make_role_user(db_session, "front_desk")
+    working = make_role_user(db_session, "sales")
     db_session.add(CCFpAgent(user_id=paused.id, accepting_new=False))
     db_session.flush()
 

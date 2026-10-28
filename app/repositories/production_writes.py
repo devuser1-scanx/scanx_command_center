@@ -13,6 +13,11 @@ Approved writes:
 3. Record a manual patient check-in performed through Command Center by:
    - updating the existing `appointment` row; and
    - inserting/updating the existing `checkins` row.
+4. Add a note or a disposition to a call in the existing `dialer_call_notes` and
+   `dialer_call_dispositions` tables: the same tables, with the same columns, the
+   standalone Web Dialer service writes. (That service also writes `call_logs`
+   and the call events for calls placed from the Calls module, since Twilio asks
+   it what to do with them; Command Center only reads those.)
 
 Do not add additional production writes outside this module without an explicit
 architectural decision.
@@ -23,7 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -207,3 +212,47 @@ def manual_check_in_appointment(
         checked_in_at=timestamp,
         already_checked_in=False,
     )
+
+
+# ---------------------------------------------------------------------
+# Calls module (Web Dialer): notes and dispositions on a call.
+#
+# Plain SQL, matching the standalone Web Dialer service column for column. None
+# of these functions commit: the caller owns the transaction.
+# ---------------------------------------------------------------------
+
+
+def insert_call_note(
+    prod_db: Session, *, call_log_id: int, note: str, created_by: str | None
+) -> int:
+    note_id = prod_db.execute(
+        text(
+            """
+            INSERT INTO dialer_call_notes (call_log_id, note, created_by, created_at)
+            VALUES (:call_log_id, :note, :created_by, NOW())
+            RETURNING id
+            """
+        ),
+        {"call_log_id": call_log_id, "note": note, "created_by": created_by},
+    ).scalar_one()
+
+    return int(note_id)
+
+
+def insert_call_disposition(
+    prod_db: Session, *, call_log_id: int, disposition: str, created_by: str | None
+) -> int:
+    disposition_id = prod_db.execute(
+        text(
+            """
+            INSERT INTO dialer_call_dispositions (
+                call_log_id, disposition, created_by, created_at
+            )
+            VALUES (:call_log_id, :disposition, :created_by, NOW())
+            RETURNING id
+            """
+        ),
+        {"call_log_id": call_log_id, "disposition": disposition, "created_by": created_by},
+    ).scalar_one()
+
+    return int(disposition_id)

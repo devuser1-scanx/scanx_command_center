@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.v1.routes import (
     auth,
+    calls,
     clinics,
     dashboard,
     fax_portal,
@@ -14,6 +15,7 @@ from app.api.v1.routes import (
     reports,
     roles,
     users,
+    ws_calls,
     ws_dashboard,
 )
 
@@ -87,4 +89,14 @@ api_router.include_router(
 api_router.include_router(
     fax_portal_twilio_webhooks.router,
     tags=["fax portal"],
+)
+
+api_router.include_router(
+    calls.router,
+    tags=["calls"],
+)
+
+api_router.include_router(
+    ws_calls.router,
+    tags=["calls"],
 )

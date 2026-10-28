@@ -89,6 +89,26 @@ def list_users(
     return users, total
 
 
+def count_other_active_admins(
+    db: Session,
+    *,
+    excluding_user_id: int,
+) -> int:
+    """Active users, other than the given one, who hold the admin role."""
+    statement = (
+        select(func.count(func.distinct(CCUser.id)))
+        .join(CCUserRole, CCUserRole.user_id == CCUser.id)
+        .join(CCRole, CCRole.id == CCUserRole.role_id)
+        .where(
+            CCRole.code == "admin",
+            CCUser.is_active.is_(True),
+            CCUser.id != excluding_user_id,
+        )
+    )
+
+    return db.scalar(statement) or 0
+
+
 def list_active_roles(db: Session) -> list[CCRole]:
     statement = select(CCRole).where(CCRole.is_active.is_(True)).order_by(CCRole.name)
 

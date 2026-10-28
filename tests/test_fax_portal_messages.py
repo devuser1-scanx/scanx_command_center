@@ -35,7 +35,7 @@ QUIET_HOURS = lambda now=None: False  # noqa: E731
 
 @pytest.fixture
 def staff(db_session: Session) -> Any:
-    return make_user(db_session, "front_desk")
+    return make_user(db_session, "sales")
 
 
 @pytest.fixture(autouse=True)

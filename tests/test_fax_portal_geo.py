@@ -88,7 +88,7 @@ def test_no_ranking_unless_every_address_can_be_located() -> None:
 
 @pytest.fixture
 def staff(db_session: Session) -> Any:
-    return make_user(db_session, "front_desk")
+    return make_user(db_session, "sales")
 
 
 @pytest.fixture

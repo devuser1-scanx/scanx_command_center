@@ -232,7 +232,7 @@ def test_a_forms_outage_fails_the_run_and_changes_nothing(db_session: Session) -
 
 @pytest.fixture
 def staff(db_session: Session) -> Any:
-    return make_user(db_session, "front_desk")
+    return make_user(db_session, "sales")
 
 
 def test_the_exam_list_includes_each_exams_reason_options(

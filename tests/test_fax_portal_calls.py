@@ -39,7 +39,7 @@ def voice_settings(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture
 def agent(db_session: Session) -> Any:
     # No phone on the user: browser calling must not need one.
-    return make_user(db_session, "front_desk")
+    return make_user(db_session, "sales")
 
 
 def card(db: Session, **kwargs: Any) -> CCFpReferralBoard:

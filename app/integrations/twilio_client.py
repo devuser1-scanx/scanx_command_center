@@ -165,23 +165,33 @@ def send_content_message(
     return _send_message(data)
 
 
-def voice_token_configured() -> bool:
+def voice_token_configured(twiml_app_sid: str | None = None) -> bool:
+    """Whether browser calling can be set up. `twiml_app_sid` names the TwiML App
+    to check (the Calls module has its own); by default it is the Fax Portal's."""
     return bool(
         settings.twilio_account_sid
         and settings.twilio_api_key_sid
         and settings.twilio_api_key_secret
-        and settings.twilio_twiml_app_sid
+        and (twiml_app_sid or settings.twilio_twiml_app_sid)
     )
 
 
-def build_voice_access_token(*, identity: str, ttl_seconds: int = 600) -> str:
+def build_voice_access_token(
+    *,
+    identity: str,
+    ttl_seconds: int = 600,
+    twiml_app_sid: str | None = None,
+) -> str:
     """A short-lived Twilio Access Token (JWT signed with the API key's secret)
-    that lets one browser place outgoing calls through the TwiML App. The token
-    only starts a call; the patient's number is never in it."""
-    if not voice_token_configured():
+    that lets one browser place outgoing calls through a TwiML App (the Fax
+    Portal's unless `twiml_app_sid` names another). The token only starts a
+    call; the patient's number is never in it."""
+    app_sid = twiml_app_sid or settings.twilio_twiml_app_sid
+
+    if not voice_token_configured(app_sid):
         raise RuntimeError(
             "TWILIO_ACCOUNT_SID, TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET and "
-            "TWILIO_TWIML_APP_SID must be configured for browser calling."
+            "a TwiML App SID must be configured for browser calling."
         )
 
     now = int(time.time())
@@ -196,7 +206,7 @@ def build_voice_access_token(*, identity: str, ttl_seconds: int = 600) -> str:
             "exp": now + ttl_seconds,
             "grants": {
                 "identity": identity,
-                "voice": {"outgoing": {"application_sid": settings.twilio_twiml_app_sid}},
+                "voice": {"outgoing": {"application_sid": app_sid}},
             },
         },
         settings.twilio_api_key_secret or "",

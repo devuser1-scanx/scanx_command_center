@@ -34,6 +34,7 @@ from app.services.users import (
     assign_roles,
     build_user_response,
     create_user,
+    delete_user,
     get_user_or_404,
     get_users,
     set_user_status,
@@ -130,6 +131,25 @@ def update_command_center_user(
         db,
         user_id=user_id,
         payload=payload,
+        actor_user=current_user,
+        ip_address=get_client_ip(request),
+        user_agent=get_user_agent(request),
+    )
+
+
+@router.delete(
+    "/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_command_center_user(
+    user_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: CCUser = Depends(require_permission("users.delete")),
+) -> None:
+    delete_user(
+        db,
+        user_id=user_id,
         actor_user=current_user,
         ip_address=get_client_ip(request),
         user_agent=get_user_agent(request),

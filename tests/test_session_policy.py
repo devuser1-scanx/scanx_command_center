@@ -17,7 +17,7 @@ from app.services.auth import IssuedTokens, issue_tokens, login, refresh_tokens
 
 @pytest.fixture
 def user(db_session: Session) -> Any:
-    return make_user(db_session, "front_desk")
+    return make_user(db_session, "sales")
 
 
 def sign_in(db: Session, user: Any) -> IssuedTokens:

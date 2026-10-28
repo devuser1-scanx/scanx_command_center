@@ -264,7 +264,7 @@ def test_an_acuity_error_is_recorded_and_changes_nothing(db_session: Session) ->
 
 
 def test_runs_record_who_and_how(db_session: Session) -> None:
-    user = make_user(db_session, "front_desk")
+    user = make_user(db_session, "sales")
 
     run = sync(db_session, trigger="manual", triggered_by_user_id=user.id)
 
@@ -279,7 +279,7 @@ def test_runs_record_who_and_how(db_session: Session) -> None:
 
 @pytest.fixture
 def staff(db_session: Session) -> Any:
-    return make_user(db_session, "front_desk")
+    return make_user(db_session, "sales")
 
 
 def test_dropdown_endpoints_read_the_synced_tables(

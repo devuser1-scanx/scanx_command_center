@@ -29,7 +29,7 @@ PHONE = "+12145550187"
 
 @pytest.fixture
 def staff(db_session: Session) -> Any:
-    return make_user(db_session, "front_desk")
+    return make_user(db_session, "sales")
 
 
 def worked_card(db: Session, **kwargs: Any) -> CCFpReferralBoard:

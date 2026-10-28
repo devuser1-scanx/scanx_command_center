@@ -13,7 +13,7 @@ from app.models.fax_portal import CCFpAgent, CCFpReferralBoard, CCFpStatus
 # Role membership is the only thing that makes someone assignable; cc_fp_agent
 # just holds per-person settings (pause, open-card cap) and the round-robin
 # timestamp, and a row is created for a user the first time it is needed.
-ASSIGNABLE_ROLES = frozenset({"front_desk", "sales"})
+ASSIGNABLE_ROLES = frozenset({"sales"})
 
 
 def assignable_user_clause() -> Any:
@@ -57,7 +57,7 @@ def assign_new_referral(db: Session, referral: CCFpReferralBoard) -> int | None:
     """Auto-assigns a freshly created card
     (docs/implementation-plan.md section 2).
 
-    Among active users with the front_desk or sales role whose cc_fp_agent
+    Among active users with the sales role whose cc_fp_agent
     row is accepting new cards and is below max_open, picks the one with the
     fewest open cards (cards whose status has is_open = true); ties go to
     whoever was assigned longest ago (never-assigned first), which gives plain

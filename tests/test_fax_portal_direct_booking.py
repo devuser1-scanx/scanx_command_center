@@ -90,7 +90,7 @@ def acuity(monkeypatch: pytest.MonkeyPatch) -> FakeAcuity:
 
 @pytest.fixture
 def staff(db_session: Session) -> Any:
-    return make_user(db_session, "front_desk")
+    return make_user(db_session, "sales")
 
 
 def bookable(db: Session, monkeypatch: pytest.MonkeyPatch, **kwargs: Any) -> CCFpReferralBoard:

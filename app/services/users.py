@@ -15,6 +15,7 @@ from app.integrations.gmail_client import GmailApiError, send_email
 from app.models.auth import CCUser
 from app.repositories.auth import revoke_all_user_sessions
 from app.repositories.users import (
+    count_other_active_admins,
     get_roles_by_codes,
     get_user_by_email,
     get_user_by_id,
@@ -258,6 +259,82 @@ def get_user_or_404(
     return user
 
 
+def _ensure_another_active_admin(
+    db: Session,
+    user: CCUser,
+) -> None:
+    """Refuses a change that would leave the system with no active admin.
+
+    Only matters when `user` is itself an active admin: anyone else can be
+    deactivated, demoted or deleted freely.
+    """
+    is_active_admin = user.is_active and any(
+        user_role.role.code == "admin" for user_role in user.roles
+    )
+
+    if is_active_admin and count_other_active_admins(db, excluding_user_id=user.id) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This is the last active admin; at least one must remain.",
+        )
+
+
+def delete_user(
+    db: Session,
+    *,
+    user_id: int,
+    actor_user: CCUser,
+    ip_address: str | None,
+    user_agent: str | None,
+) -> None:
+    """Permanently deletes a user.
+
+    Their roles, clinic access, sessions and reset tokens go with them; records
+    that merely point at them (audit entries, call/fax/SMS history, assignments)
+    keep the row and lose the link, so history is not lost. Deactivating is the
+    reversible alternative.
+    """
+    user = get_user_or_404(db, user_id)
+
+    if user.id == actor_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot delete your own account.",
+        )
+
+    _ensure_another_active_admin(db, user)
+
+    # Written before the delete and without a target link (which the delete
+    # would clear anyway), so who was removed stays readable in the audit log.
+    record_user_activity(
+        db,
+        actor_user_id=actor_user.id,
+        target_user_id=None,
+        action="users.deleted",
+        resource_type="cc_user",
+        resource_id=str(user.id),
+        details={
+            "email": user.email,
+            "name": f"{user.first_name} {user.last_name}".strip(),
+            "roles": sorted(user_role.role.code for user_role in user.roles),
+        },
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
+
+    db.delete(user)
+
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=("The user is still referenced by other records. Deactivate them instead."),
+        ) from exc
+
+
 def get_users(
     db: Session,
     *,
@@ -345,6 +422,9 @@ def set_user_status(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=("You cannot deactivate your own account."),
         )
+
+    if not is_active:
+        _ensure_another_active_admin(db, user)
 
     user.is_active = is_active
     user.updated_by_user_id = actor_user.id
@@ -437,6 +517,9 @@ def assign_roles(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=("You cannot remove your own admin role."),
         )
+
+    if "admin" not in found:
+        _ensure_another_active_admin(db, user)
 
     replace_user_roles(
         db,

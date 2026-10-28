@@ -271,7 +271,7 @@ def test_role_and_permission_dependencies_reject_missing_access() -> None:
     user = make_user()
 
     with pytest.raises(HTTPException) as role_error:
-        require_role("front_desk")(current_user=user)
+        require_role("sonographer")(current_user=user)
 
     with pytest.raises(HTTPException) as permission_error:
         require_permission("users.create")(current_user=user)

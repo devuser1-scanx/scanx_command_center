@@ -48,6 +48,8 @@ def get_prod_db() -> Generator[
     1. Mirror successful Command Center SMS sends into `messages`.
     2. Record sent form links in `form_tracking`.
     3. Persist Manual Check-in in `appointment` and `checkins`.
+    4. Record Calls-module (Web Dialer) calls in `call_logs` and the
+       `dialer_call_*` tables, the same ones the standalone Web Dialer writes.
 
     Command Center never runs migrations against this production schema.
     """

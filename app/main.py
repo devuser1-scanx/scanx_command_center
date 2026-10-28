@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
+from app.api.v1.routes.ws_calls import poll_calls_loop
 from app.api.v1.routes.ws_dashboard import poll_dashboard_timeline_loop
 from app.core.config import settings
 from app.integrations.gcs_reports import list_report_groups
@@ -37,6 +38,7 @@ async def add_security_headers(
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     poll_task = asyncio.create_task(poll_dashboard_timeline_loop())
+    calls_poll_task = asyncio.create_task(poll_calls_loop())
 
     # Pre-warms the report groups cache so the first Reports tab load
     # doesn't pay the full bucket-listing cost (~15-20s across ~2k blobs).
@@ -46,9 +48,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         poll_task.cancel()
+        calls_poll_task.cancel()
 
         with suppress(asyncio.CancelledError):
             await poll_task
+            await calls_poll_task
 
 
 def create_app() -> FastAPI:

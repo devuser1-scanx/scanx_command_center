@@ -23,7 +23,7 @@ from app.services.fax_portal_referrals import (
 )
 
 ADMIN = {"admin"}
-STAFF = {"front_desk"}
+STAFF = {"sales"}
 
 
 def move(db: Session, card: CCFpReferralBoard, to: str, **kwargs):
@@ -49,7 +49,7 @@ def test_release_needs_clinic_and_exam_1(db_session: Session) -> None:
 
 
 def test_release_with_clinic_and_exam_moves_and_stamps(db_session: Session) -> None:
-    user = make_user(db_session, "front_desk")
+    user = make_user(db_session, "sales")
     card = make_card(db_session, status="review_required")
     add_clinic_and_exam(db_session, card)
 
@@ -81,7 +81,7 @@ def test_not_a_referral_needs_a_reason(db_session: Session) -> None:
 
 
 def test_not_a_referral_records_who_and_why(db_session: Session) -> None:
-    user = make_user(db_session, "front_desk")
+    user = make_user(db_session, "sales")
     card = make_card(db_session, status="review_required")
 
     move(db_session, card, "not_referral", user=user, extra=MoveExtra(reason="Lab report"))
@@ -110,7 +110,7 @@ def test_only_review_cards_can_become_not_a_referral(db_session: Session) -> Non
     ],
 )
 def test_an_open_card_can_go_back_to_review_required(db_session: Session, start: str) -> None:
-    user = make_user(db_session, "front_desk")
+    user = make_user(db_session, "sales")
     card = make_card(db_session, status=start)
 
     result = move(db_session, card, "review_required", user=user, source="drag")
@@ -130,7 +130,7 @@ def test_an_open_card_can_go_back_to_review_required(db_session: Session, start:
 
 
 def test_sending_a_card_back_forgets_the_old_review_outcome(db_session: Session) -> None:
-    user = make_user(db_session, "front_desk")
+    user = make_user(db_session, "sales")
     card = make_card(db_session, status="review_required")
     add_clinic_and_exam(db_session, card)
 
@@ -470,7 +470,7 @@ def test_missing_referral(db_session: Session) -> None:
 
 
 def test_move_writes_history_and_activity(db_session: Session) -> None:
-    user = make_user(db_session, "front_desk")
+    user = make_user(db_session, "sales")
     card = make_card(db_session, status="ready_for_contact")
 
     move(
@@ -578,7 +578,7 @@ def test_unassigning_clears_the_assignment(db_session: Session) -> None:
 
 
 def test_non_manager_cannot_reassign(db_session: Session) -> None:
-    staff = make_user(db_session, "front_desk")
+    staff = make_user(db_session, "sales")
     agent = make_user(db_session, "sales", is_agent=True)
     card = make_card(db_session, status="ready_for_contact")
 
@@ -586,23 +586,23 @@ def test_non_manager_cannot_reassign(db_session: Session) -> None:
         assign_referral(db_session, card.id, agent.id, user=staff, role_codes=STAFF)
 
 
-def test_assignee_must_be_a_sales_or_front_desk_user(db_session: Session) -> None:
+def test_assignee_must_be_a_sales_agent(db_session: Session) -> None:
     admin = make_user(db_session, "admin")
     sonographer = make_user(db_session, "sonographer")
     card = make_card(db_session, status="ready_for_contact")
 
-    with pytest.raises(InvalidMoveError, match="sales or front-desk"):
+    with pytest.raises(InvalidMoveError, match="active sales agent"):
         assign_referral(db_session, card.id, sonographer.id, user=admin, role_codes=ADMIN)
 
 
-def test_front_desk_user_needs_no_settings_row_to_be_assigned(db_session: Session) -> None:
+def test_sales_agent_needs_no_settings_row_to_be_assigned(db_session: Session) -> None:
     admin = make_user(db_session, "admin")
-    front = make_user(db_session, "front_desk")
+    agent = make_user(db_session, "sales")
     card = make_card(db_session, status="ready_for_contact")
 
-    assign_referral(db_session, card.id, front.id, user=admin, role_codes=ADMIN)
+    assign_referral(db_session, card.id, agent.id, user=admin, role_codes=ADMIN)
 
-    assert card.assigned_user_id == front.id
+    assert card.assigned_user_id == agent.id
 
 
 def test_reassign_checks_row_version(db_session: Session) -> None:

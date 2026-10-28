@@ -83,7 +83,7 @@ def bucket(monkeypatch: pytest.MonkeyPatch) -> FakeBucket:
 
 @pytest.fixture
 def agent(db_session: Session) -> Any:
-    return make_user(db_session, "front_desk")
+    return make_user(db_session, "sales")
 
 
 def at(day: int, hour: int, minute: int = 0) -> datetime:
@@ -292,7 +292,10 @@ def test_the_fax_goes_through_the_westfax_email_gateway_like_the_patient_fax(
     assert sent["to"] == ["9725550100@westfax.com"]
     assert sent["cc"] == [settings.fax_feedback_email] and sent["bcc"] == []
     assert sent["subject"] == KAREN_SUBJECT
-    assert sent["attachments"] == []
+    # The original referral fax goes along by default.
+    assert [attachment.filename for attachment in sent["attachments"]] == [
+        "original-referral-fax.pdf"
+    ]
     # The message as a simple HTML body: escaped, line breaks kept.
     assert "Line one<br>\nLine &lt;two&gt; &amp; more" in sent["html_body"]
     assert response.json()["destination_number"] == "9725550100@westfax.com"
@@ -334,6 +337,7 @@ def test_the_send_is_audited_and_shows_on_the_timeline_without_the_number(
         "destination_last4": "0100",
         "email_message_id": "gmail-msg-1",
         "moved_to": None,
+        "attached_original": True,
     }
     assert "972" not in str(entry.details)
 

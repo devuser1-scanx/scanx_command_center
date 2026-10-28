@@ -33,6 +33,8 @@ approved write operations are isolated in app/repositories/production_writes.py:
 2. Record sent forms in the existing `form_tracking` table.
 3. Record a Command Center manual patient check-in by updating the existing
    `appointment` row and upserting the existing `checkins` row.
+4. Record Calls-module (Web Dialer) calls in the existing `call_logs` table and
+   the `dialer_call_*` companion tables (plain SQL, not mapped here).
 
 No other production writes should be added outside that repository without
 an explicit architectural decision.

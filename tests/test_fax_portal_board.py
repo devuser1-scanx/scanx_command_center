@@ -44,10 +44,8 @@ def test_roles_outside_the_section_are_refused(client: TestClient, db_session: S
         assert response.status_code == 403, path
 
 
-def test_admin_front_desk_and_sales_can_open_the_board(
-    client: TestClient, db_session: Session
-) -> None:
-    for role in ("admin", "front_desk", "sales"):
+def test_admin_and_sales_can_open_the_board(client: TestClient, db_session: Session) -> None:
+    for role in ("admin", "sales"):
         user = make_user(db_session, role)
 
         assert client.get(BOARD, headers=auth_headers(client, user)).status_code == 200, role
@@ -61,7 +59,7 @@ def test_admin_front_desk_and_sales_can_open_the_board(
 def test_columns_follow_cc_fp_status_order_and_skip_off_board_statuses(
     client: TestClient, db_session: Session
 ) -> None:
-    headers = auth_headers(client, make_user(db_session, "front_desk"))
+    headers = auth_headers(client, make_user(db_session, "sales"))
 
     codes = [c["code"] for c in client.get(BOARD, headers=headers).json()["columns"]]
 
@@ -257,7 +255,7 @@ def test_search_by_name_and_phone(client: TestClient, db_session: Session) -> No
     )
     db_session.commit()
 
-    headers = auth_headers(client, make_user(db_session, "front_desk"))
+    headers = auth_headers(client, make_user(db_session, "sales"))
 
     def ids(q: str) -> set[int]:
         response = client.get(BOARD, params={"q": q}, headers=headers)
@@ -337,11 +335,9 @@ def test_sidebar_counts(client: TestClient, db_session: Session) -> None:
     assert response.json() == {"call_queue": 2, "intake_review": 2}
 
 
-def test_agents_list_is_every_active_sales_or_front_desk_user(
-    client: TestClient, db_session: Session
-) -> None:
+def test_agents_list_is_every_active_sales_user(client: TestClient, db_session: Session) -> None:
     paused = make_user(db_session, "sales", is_agent=True, accepting_new=False)
-    front = make_user(db_session, "front_desk")  # no settings row needed
+    unconfigured = make_user(db_session, "sales")  # no settings row needed
     make_user(db_session, "sonographer")
     admin = make_user(db_session, "admin")
 
@@ -349,7 +345,7 @@ def test_agents_list_is_every_active_sales_or_front_desk_user(
 
     assert {(a["user_id"], a["accepting_new"]) for a in response.json()} == {
         (paused.id, False),
-        (front.id, True),
+        (unconfigured.id, True),
     }
 
 
@@ -363,7 +359,7 @@ def test_since_returns_nothing_until_a_card_changes(
 ) -> None:
     card = make_card(db_session, status="ready_for_contact")
     db_session.commit()
-    headers = auth_headers(client, make_user(db_session, "front_desk"))
+    headers = auth_headers(client, make_user(db_session, "sales"))
 
     first = client.get(BOARD, headers=headers).json()
     assert first["changed"] is True
@@ -397,7 +393,7 @@ def test_since_can_be_sent_as_a_header_so_every_poll_has_the_same_url(
 ) -> None:
     make_card(db_session, status="ready_for_contact")
     db_session.commit()
-    headers = auth_headers(client, make_user(db_session, "front_desk"))
+    headers = auth_headers(client, make_user(db_session, "sales"))
 
     first = client.get(BOARD, headers=headers).json()
     later = (datetime.fromisoformat(first["server_time"]) + timedelta(seconds=60)).isoformat()
@@ -455,7 +451,7 @@ def test_invalid_move_is_422_with_a_readable_reason_and_changes_nothing(
     response = client.post(
         f"/fax-portal/referrals/{card.id}/move",
         json={"to_status": "ready_for_contact", "row_version": 1},
-        headers=auth_headers(client, make_user(db_session, "front_desk")),
+        headers=auth_headers(client, make_user(db_session, "sales")),
     )
 
     assert response.status_code == 422
@@ -471,7 +467,7 @@ def test_stale_drag_is_409(client: TestClient, db_session: Session) -> None:
     response = client.post(
         f"/fax-portal/referrals/{card.id}/move",
         json={"to_status": "follow_up_due", "row_version": 3},
-        headers=auth_headers(client, make_user(db_session, "front_desk")),
+        headers=auth_headers(client, make_user(db_session, "sales")),
     )
 
     assert response.status_code == 409
@@ -484,7 +480,7 @@ def test_move_unknown_referral_is_404(client: TestClient, db_session: Session) -
     response = client.post(
         "/fax-portal/referrals/999999999/move",
         json={"to_status": "follow_up_due", "row_version": 1},
-        headers=auth_headers(client, make_user(db_session, "front_desk")),
+        headers=auth_headers(client, make_user(db_session, "sales")),
     )
 
     assert response.status_code == 404
@@ -514,7 +510,7 @@ def test_manager_reopen_over_http(client: TestClient, db_session: Session) -> No
     staff = client.post(
         f"/fax-portal/referrals/{card.id}/move",
         json=body,
-        headers=auth_headers(client, make_user(db_session, "front_desk")),
+        headers=auth_headers(client, make_user(db_session, "sales")),
     )
     admin = client.post(
         f"/fax-portal/referrals/{card.id}/move",
@@ -535,7 +531,7 @@ def test_assign_endpoint_is_admin_only(client: TestClient, db_session: Session) 
     refused = client.post(
         f"/fax-portal/referrals/{card.id}/assign",
         json=body,
-        headers=auth_headers(client, make_user(db_session, "front_desk")),
+        headers=auth_headers(client, make_user(db_session, "sales")),
     )
     done = client.post(
         f"/fax-portal/referrals/{card.id}/assign",

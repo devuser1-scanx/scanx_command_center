@@ -332,7 +332,7 @@ def get_counts(db: Session, user: CCUser) -> FaxPortalCountsResponse:
 
 
 def list_agents(db: Session) -> list[AgentResponse]:
-    """People referrals can be assigned to (active sales / front-desk users),
+    """People referrals can be assigned to (active sales agents),
     for the assignee filter and reassign. accepting_new comes from the
     person's cc_fp_agent settings row when they have one."""
     return [

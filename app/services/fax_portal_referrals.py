@@ -354,7 +354,7 @@ def assign_referral(
 ) -> CCFpReferralBoard:
     """Manual (re)assignment of a card by a manager. assignee None unassigns.
 
-    The assignee must be an active sales or front-desk user. Sets assignment_source to
+    The assignee must be an active sales agent. Sets assignment_source to
     'manual'.
     """
     if not role_codes & MANAGER_ROLES:
@@ -373,7 +373,7 @@ def assign_referral(
         )
 
     if assignee_user_id is not None and not is_assignable(db, assignee_user_id):
-        raise InvalidMoveError("That person is not an active sales or front-desk user.")
+        raise InvalidMoveError("That person is not an active sales agent.")
 
     previous = referral.assigned_user_id
 

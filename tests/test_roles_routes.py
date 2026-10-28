@@ -11,7 +11,7 @@ def test_list_roles_returns_seeded_roles(
 
     assert response.status_code == 200
     codes = {role["code"] for role in response.json()}
-    assert {"admin", "front_desk", "sonographer", "sales"}.issubset(codes)
+    assert {"admin", "sonographer", "sales"}.issubset(codes)
 
 
 def test_list_roles_requires_authentication(

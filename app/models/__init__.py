@@ -10,6 +10,7 @@ from app.models.auth import (
     CCUserClinicAccess,
     CCUserRole,
 )
+from app.models.calls import CCCallLog
 from app.models.fax import CCFaxTransmission
 from app.models.fax_portal import (
     CCFpActivityLog,
@@ -49,6 +50,7 @@ __all__ = [
     "CCPasswordResetToken",
     "CCLoginAudit",
     "CCUserActivityAudit",
+    "CCCallLog",
     "CCFaxTransmission",
     "CCFpActivityLog",
     "CCFpAcuityAppointmentType",
