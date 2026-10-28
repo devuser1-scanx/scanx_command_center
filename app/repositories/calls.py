@@ -57,6 +57,42 @@ _MISSED_FILTER = "LOWER(COALESCE(cl.status, '')) IN :missed"
 
 _DAY_FILTER = "cl.created_at BETWEEN :start AND :end"
 
+# Whole statements, built once from the constants above (never from request
+# data: values only ever travel as bound parameters).
+_RECENT_CALLS_SQL = f"{_CALL_SELECT} ORDER BY cl.created_at DESC LIMIT :limit"
+
+_CALL_BY_ID_SQL = f"{_CALL_SELECT} WHERE cl.id = :call_log_id LIMIT 1"
+
+_DAY_RECENT_CALLS_SQL = f"{_CALL_SELECT} WHERE {_DAY_FILTER} ORDER BY cl.created_at DESC LIMIT 10"
+
+_SEARCH_PATIENTS_SQL = f"""
+    SELECT
+        a.appointment_id, a.first_name, a.last_name,
+        CONCAT_WS(' ', a.first_name, a.last_name) AS full_name,
+        a.phone, a.email, a.appointment_type, a.category,
+        a.appointment_datetime, a.date, a.time, a.clinic_id, a.location,
+        a.calendar, c.name AS clinic_name, c.city AS clinic_city
+    FROM appointment a
+    LEFT JOIN clinics c ON c.id = a.clinic_id
+    WHERE
+        a.first_name ILIKE :text_query
+        OR a.last_name ILIKE :text_query
+        OR CONCAT_WS(' ', a.first_name, a.last_name) ILIKE :text_query
+        OR a.email ILIKE :text_query
+        OR {_DIGITS_ONLY.format(column="a.phone")} ILIKE :phone_query
+    ORDER BY
+        COALESCE(a.appointment_datetime, a.date) DESC NULLS LAST,
+        a.created_at DESC NULLS LAST
+    LIMIT :limit
+"""
+
+_PATIENT_CALL_HISTORY_SQL = f"""
+    {_CALL_SELECT}
+    WHERE {_DIGITS_ONLY.format(column="cl.patient_number")} ILIKE :phone_query
+    ORDER BY cl.created_at DESC
+    LIMIT :limit
+"""
+
 
 def _utc(value: datetime | None) -> datetime | None:
     if value is None:
@@ -109,7 +145,7 @@ def day_range_utc(first: date, last: date) -> tuple[datetime, datetime]:
 def list_recent_calls(prod_db: Session, limit: int) -> list[dict[str, Any]]:
     rows = (
         prod_db.execute(
-            text(f"{_CALL_SELECT} ORDER BY cl.created_at DESC LIMIT :limit"),
+            text(_RECENT_CALLS_SQL),
             {"limit": limit},
         )
         .mappings()
@@ -137,7 +173,7 @@ def list_missed_calls(prod_db: Session, limit: int) -> list[dict[str, Any]]:
 def get_call_by_id(prod_db: Session, call_log_id: int) -> dict[str, Any] | None:
     row = (
         prod_db.execute(
-            text(f"{_CALL_SELECT} WHERE cl.id = :call_log_id LIMIT 1"),
+            text(_CALL_BY_ID_SQL),
             {"call_log_id": call_log_id},
         )
         .mappings()
@@ -187,7 +223,7 @@ def call_summary(prod_db: Session, start: datetime, end: datetime) -> dict[str, 
 
     recent = (
         prod_db.execute(
-            text(f"{_CALL_SELECT} WHERE {_DAY_FILTER} ORDER BY cl.created_at DESC LIMIT 10"),
+            text(_DAY_RECENT_CALLS_SQL),
             params,
         )
         .mappings()
@@ -233,28 +269,7 @@ def search_patients(prod_db: Session, query: str, limit: int) -> list[dict[str, 
 
     rows = (
         prod_db.execute(
-            text(
-                f"""
-            SELECT
-                a.appointment_id, a.first_name, a.last_name,
-                CONCAT_WS(' ', a.first_name, a.last_name) AS full_name,
-                a.phone, a.email, a.appointment_type, a.category,
-                a.appointment_datetime, a.date, a.time, a.clinic_id, a.location,
-                a.calendar, c.name AS clinic_name, c.city AS clinic_city
-            FROM appointment a
-            LEFT JOIN clinics c ON c.id = a.clinic_id
-            WHERE
-                a.first_name ILIKE :text_query
-                OR a.last_name ILIKE :text_query
-                OR CONCAT_WS(' ', a.first_name, a.last_name) ILIKE :text_query
-                OR a.email ILIKE :text_query
-                OR {_DIGITS_ONLY.format(column="a.phone")} ILIKE :phone_query
-            ORDER BY
-                COALESCE(a.appointment_datetime, a.date) DESC NULLS LAST,
-                a.created_at DESC NULLS LAST
-            LIMIT :limit
-            """
-            ),
+            text(_SEARCH_PATIENTS_SQL),
             {
                 "text_query": f"%{term}%",
                 "phone_query": f"%{_phone_digits(term) or term}%",
@@ -285,14 +300,7 @@ def patient_call_history(prod_db: Session, phone: str, limit: int) -> list[dict[
 
     rows = (
         prod_db.execute(
-            text(
-                f"""
-            {_CALL_SELECT}
-            WHERE {_DIGITS_ONLY.format(column="cl.patient_number")} ILIKE :phone_query
-            ORDER BY cl.created_at DESC
-            LIMIT :limit
-            """
-            ),
+            text(_PATIENT_CALL_HISTORY_SQL),
             {"phone_query": f"%{digits}%", "limit": limit},
         )
         .mappings()
