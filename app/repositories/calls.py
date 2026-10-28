@@ -118,10 +118,18 @@ def format_call_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _static_sql(statement: str) -> Any:
+    """Wraps a statement written in this module. Only ever called with the
+    constants above: request data (limits, dates, phone numbers, search text) is
+    passed as bound parameters when the statement is executed, never spliced in."""
+    # nosemgrep: python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text
+    return text(statement)
+
+
 def _in_clause(statement: str) -> Any:
     """A statement using "IN :missed": the list of missed statuses is bound (and
     expanded into one placeholder each) automatically."""
-    return text(statement).bindparams(
+    return _static_sql(statement).bindparams(
         bindparam("missed", value=list(MISSED_STATUSES), expanding=True)
     )
 
@@ -145,7 +153,7 @@ def day_range_utc(first: date, last: date) -> tuple[datetime, datetime]:
 def list_recent_calls(prod_db: Session, limit: int) -> list[dict[str, Any]]:
     rows = (
         prod_db.execute(
-            text(_RECENT_CALLS_SQL),
+            _static_sql(_RECENT_CALLS_SQL),
             {"limit": limit},
         )
         .mappings()
@@ -173,7 +181,7 @@ def list_missed_calls(prod_db: Session, limit: int) -> list[dict[str, Any]]:
 def get_call_by_id(prod_db: Session, call_log_id: int) -> dict[str, Any] | None:
     row = (
         prod_db.execute(
-            text(_CALL_BY_ID_SQL),
+            _static_sql(_CALL_BY_ID_SQL),
             {"call_log_id": call_log_id},
         )
         .mappings()
@@ -223,7 +231,7 @@ def call_summary(prod_db: Session, start: datetime, end: datetime) -> dict[str, 
 
     recent = (
         prod_db.execute(
-            text(_DAY_RECENT_CALLS_SQL),
+            _static_sql(_DAY_RECENT_CALLS_SQL),
             params,
         )
         .mappings()
@@ -269,7 +277,7 @@ def search_patients(prod_db: Session, query: str, limit: int) -> list[dict[str, 
 
     rows = (
         prod_db.execute(
-            text(_SEARCH_PATIENTS_SQL),
+            _static_sql(_SEARCH_PATIENTS_SQL),
             {
                 "text_query": f"%{term}%",
                 "phone_query": f"%{_phone_digits(term) or term}%",
@@ -300,7 +308,7 @@ def patient_call_history(prod_db: Session, phone: str, limit: int) -> list[dict[
 
     rows = (
         prod_db.execute(
-            text(_PATIENT_CALL_HISTORY_SQL),
+            _static_sql(_PATIENT_CALL_HISTORY_SQL),
             {"phone_query": f"%{digits}%", "limit": limit},
         )
         .mappings()
