@@ -98,6 +98,25 @@ class Settings(BaseSettings):
     # shared tables. Unset: Calls answers 503.
     dialer_twiml_app_sid: str | None = None
 
+    # Messages module (the Patient Inbox). It sends through the same Twilio
+    # account and Messaging Service as the rest of the app (twilio_account_sid,
+    # twilio_auth_token, twilio_messaging_service_sid) and stores
+    # twilio_voice_from_number as the business number of each conversation.
+    # twilio_rcs_card_content_sid is the Content Template of the exam RCS card;
+    # an exam with its own template (twilio_rcs_card_content_sid_<exam>) uses
+    # that one instead.
+    # Incoming texts keep arriving through the standalone Inbox service (its
+    # Twilio webhook), which writes them to Firestore; Command Center reads and
+    # writes the same Firestore conversations.
+    twilio_rcs_card_content_sid: str | None = None
+    twilio_rcs_card_content_sid_fibroscan: str | None = None
+    twilio_rcs_card_content_sid_thyroid: str | None = None
+    twilio_rcs_card_content_sid_abdominal: str | None = None
+    twilio_rcs_card_content_sid_transvaginal: str | None = None
+    # Cloud Run service that returns a short-lived signed URL for an image in the
+    # card images bucket (GET ?file=<path>); the cards' pictures come from it.
+    signed_url_service_url: str = "https://generatesignedurl-794794356928.us-central1.run.app"
+
     # Payment-reminder Content Template triggered after successful check-in.
     #
     # Content variables:

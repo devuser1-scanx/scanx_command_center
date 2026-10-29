@@ -11,6 +11,7 @@ from app.api.v1.routes import (
     fax_portal_twilio_webhooks,
     fax_portal_webhooks,
     health,
+    inbox,
     patients,
     reports,
     roles,
@@ -99,4 +100,9 @@ api_router.include_router(
 api_router.include_router(
     ws_calls.router,
     tags=["calls"],
+)
+
+api_router.include_router(
+    inbox.router,
+    tags=["inbox"],
 )

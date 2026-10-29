@@ -14,6 +14,11 @@ python-multipart==0.0.31
 httpx==0.28.1
 google-cloud-storage==3.13.1
 google-auth==2.57.0
+google-cloud-firestore==2.34.1
+# Firestore builds its resource header through google-api-core. From 2.35.0 it
+# URL-encodes the default database name "(default)"; older versions send the
+# raw parentheses, which gRPC 1.85 rejects ("Illegal header value").
+google-api-core>=2.35.0
 
 # Not a direct dependency - pulled in transitively (observed inside the
 # built Docker image, not in the local dev venv). Pinned explicitly to

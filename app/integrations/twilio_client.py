@@ -146,8 +146,8 @@ def send_content_message(
     """
     Send a Twilio Content Template through the configured Messaging Service.
 
-    Used by Manual Check-in to preserve the existing payment-reminder
-    RCS behavior.
+    Used by Manual Check-in for the payment-reminder RCS, and by the Messages
+    module (Patient Inbox) for its texts and cards.
     """
     if not settings.twilio_messaging_service_sid:
         raise RuntimeError(
