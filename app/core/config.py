@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     # user out after this much inactivity (real input, not background polling),
     # warning them `session_warning_seconds` before. A session also ends this many
     # hours after login whatever the activity, so it cannot slide on forever.
-    session_idle_timeout_minutes: int = 30
+    session_idle_timeout_minutes: int = 45
     session_warning_seconds: int = 120
     session_max_hours: int = 12
 
