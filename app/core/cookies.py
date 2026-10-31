@@ -86,12 +86,37 @@ def require_csrf_token(request: Request) -> None:
     The CSRF cookie is deliberately readable by frontend JS so it can be
     echoed back as a header - something a cross-site attacker can't do,
     since browsers never let one origin read another origin's cookies.
+
+    That same rule is why the header is often absent in production: the
+    cookie belongs to the API's host, so a frontend on a different host cannot
+    read it with document.cookie and sends an empty header. Without a
+    fallback every refresh failed with 403 and the user was signed out when
+    the access token expired. When no header is sent, the request is accepted
+    only if its Origin is one of the frontends allowed by CORS. Browsers always
+    send Origin on cross-origin POSTs and a forging site cannot change it.
+
+    A header that IS sent must still match the cookie.
     """
-    cookie_value = request.cookies.get(CSRF_TOKEN_COOKIE_NAME)
     header_value = request.headers.get("x-csrf-token")
 
-    if not cookie_value or not header_value or not hmac.compare_digest(cookie_value, header_value):
+    if header_value:
+        cookie_value = request.cookies.get(CSRF_TOKEN_COOKIE_NAME)
+
+        if cookie_value and hmac.compare_digest(cookie_value, header_value):
+            return
+
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Missing or invalid CSRF token.",
         )
+
+    origin = (request.headers.get("origin") or "").rstrip("/")
+
+    if origin and origin in settings.cors_origins_list:
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Missing or invalid CSRF token.",
+    )
+
