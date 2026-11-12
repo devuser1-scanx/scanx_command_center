@@ -158,7 +158,7 @@ def test_sending_a_card_back_forgets_the_old_review_outcome(db_session: Session)
     assert actions == ["release", "send_to_review", "release"]
 
 
-def test_not_a_referral_can_be_sent_back_by_a_manager(db_session: Session) -> None:
+def test_not_a_referral_can_be_sent_back_to_review(db_session: Session) -> None:
     admin = make_user(db_session, "admin")
     card = make_card(db_session, status="review_required")
     move(db_session, card, "not_referral", extra=MoveExtra(reason="Looked like a lab report"))
@@ -181,18 +181,13 @@ def test_not_a_referral_can_be_sent_back_by_a_manager(db_session: Session) -> No
 @pytest.mark.parametrize(
     "closed", ["not_referral", "didnt_respond", "appointment_booked", "declined"]
 )
-def test_a_closed_card_goes_back_to_review_only_as_a_manager_reopen(
+def test_a_sales_agent_can_send_any_closed_card_back_to_review(
     db_session: Session, closed: str
 ) -> None:
     card = make_card(db_session, status=closed)
 
-    with pytest.raises(MoveForbiddenError, match="manager"):
-        move(db_session, card, "review_required", role_codes=STAFF, extra=MoveExtra(note="x"))
+    move(db_session, card, "review_required", role_codes=STAFF)
 
-    with pytest.raises(InvalidMoveError, match="note"):
-        move(db_session, card, "review_required", role_codes=ADMIN)
-
-    move(db_session, card, "review_required", role_codes=ADMIN, extra=MoveExtra(note="why"))
     assert card.status == "review_required"
 
 
@@ -390,33 +385,41 @@ def test_call_results_can_decline_or_flag_exception(db_session: Session) -> None
 
 
 # ---------------------------------------------------------------------
-# Reopening closed cards: managers only, with a note
+# Reopening closed cards: anyone who works the portal, from any column
 # ---------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
     "closed", ["didnt_respond", "appointment_booked", "not_referral", "declined"]
 )
-def test_reopen_is_manager_only(db_session: Session, closed: str) -> None:
+def test_a_sales_agent_can_reopen_any_closed_card_without_a_note(
+    db_session: Session, closed: str
+) -> None:
     card = make_card(db_session, status=closed)
 
-    with pytest.raises(MoveForbiddenError, match="manager"):
-        move(
-            db_session,
-            card,
-            "ready_for_contact",
-            role_codes=STAFF,
-            extra=MoveExtra(note="mistake"),
-        )
+    move(db_session, card, "ready_for_contact", role_codes=STAFF)
 
-    assert card.status == closed
+    assert card.status == "ready_for_contact"
 
 
-def test_reopen_needs_a_note(db_session: Session) -> None:
-    card = make_card(db_session, status="didnt_respond")
+def test_reopening_a_card_that_used_its_calls_starts_a_new_round_of_five(
+    db_session: Session,
+) -> None:
+    card = make_card(db_session, status="didnt_respond", qualifying_call_count=5)
 
-    with pytest.raises(InvalidMoveError, match="note"):
-        move(db_session, card, "ready_for_contact", role_codes=ADMIN)
+    move(db_session, card, "ready_for_contact", role_codes=STAFF)
+
+    assert card.qualifying_call_count == 0
+
+
+def test_a_card_still_in_fax_provider_pending_can_be_moved_back_to_work(
+    db_session: Session,
+) -> None:
+    card = make_card(db_session, status="fax_provider_name_pending", qualifying_call_count=5)
+
+    move(db_session, card, "follow_up_due", role_codes=STAFF)
+
+    assert (card.status, card.qualifying_call_count) == ("follow_up_due", 0)
 
 
 def test_manager_can_reopen_with_a_note(db_session: Session) -> None:

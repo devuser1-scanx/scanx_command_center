@@ -502,24 +502,17 @@ def test_move_requires_access(client: TestClient, db_session: Session) -> None:
     )
 
 
-def test_manager_reopen_over_http(client: TestClient, db_session: Session) -> None:
+def test_reopen_over_http_is_open_to_sales_agents(client: TestClient, db_session: Session) -> None:
     card = make_card(db_session, status="didnt_respond")
     db_session.commit()
-    body = {"to_status": "follow_up_due", "row_version": 1, "note": "Patient called back"}
 
-    staff = client.post(
+    response = client.post(
         f"/fax-portal/referrals/{card.id}/move",
-        json=body,
+        json={"to_status": "follow_up_due", "row_version": 1},
         headers=auth_headers(client, make_user(db_session, "sales")),
     )
-    admin = client.post(
-        f"/fax-portal/referrals/{card.id}/move",
-        json=body,
-        headers=auth_headers(client, make_user(db_session, "admin")),
-    )
 
-    assert staff.status_code == 403
-    assert admin.status_code == 200
+    assert response.status_code == 200, response.text
 
 
 def test_assign_endpoint_is_admin_only(client: TestClient, db_session: Session) -> None:

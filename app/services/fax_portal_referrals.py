@@ -13,6 +13,7 @@ from app.models.fax_portal import (
     CCFpReferralStatusHistory,
     CCFpStatus,
 )
+from app.schemas.fax_portal import CALL_LIMIT
 from app.services.fax_portal_activity import log_activity
 from app.services.fax_portal_assignment import is_assignable
 
@@ -164,23 +165,16 @@ def move_referral(
         raise InvalidMoveError("The referral is already in that column.")
 
     now = func.now()
-    is_manager = bool(role_codes and role_codes & MANAGER_ROLES)
     from_open = statuses[from_status].is_open
     action = "drag" if source == "drag" else "status_change"
     changes: dict[str, Any] = {}
 
     # -- Transition rules ---------------------------------------------
     if to_status == REVIEW:
-        # Sent back for another look: a card can need review again after it was
-        # released, rejected or has been worked for a while. Open cards go back
-        # freely; a closed one is a reopen (managers only, with a note).
-        if not from_open:
-            if not is_manager:
-                raise MoveForbiddenError("Only a manager can reopen a closed referral.")
-
-            if not (extra.note or "").strip():
-                raise InvalidMoveError("Add a note explaining why this referral is reopened.")
-
+        # Sent back for another look (an agent may need to correct details): a
+        # card can need review again after it was released, rejected or closed.
+        # Anyone who works the portal may do it, from any column, with or
+        # without a note.
         # The earlier review outcome no longer stands; the history keeps it.
         referral.released_at = None
         referral.released_by_user_id = None
@@ -287,13 +281,20 @@ def move_referral(
                 "Release this referral from Intake Review before moving it further."
             )
 
-        if not from_open:
-            # Closed -> open is a reopen: managers only, with a note.
-            if not is_manager:
-                raise MoveForbiddenError("Only a manager can reopen a closed referral.")
+        # Only a person reopens: a late call result or a job never does.
+        if not from_open and source not in {"button", "drag"}:
+            raise InvalidMoveError("This referral is closed.")
 
-            if not (extra.note or "").strip():
-                raise InvalidMoveError("Add a note explaining why this referral is reopened.")
+        # Closed -> open is a reopen: anyone who works the portal may do it from
+        # any column, with or without a note (the history records who and when).
+        # A card that used up its calls starts a fresh round of five; the earlier
+        # calls stay on the timeline.
+        if from_status not in WORKING and referral.qualifying_call_count >= CALL_LIMIT:
+            changes["qualifying_call_count"] = {
+                "from": referral.qualifying_call_count,
+                "to": 0,
+            }
+            referral.qualifying_call_count = 0
 
         if to_status == CALLBACK and extra.callback_at is not None:
             referral.callback_at = extra.callback_at
