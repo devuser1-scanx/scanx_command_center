@@ -19,6 +19,7 @@ from app.models.fax_portal import (
     CCFpCallResult,
     CCFpFax,
     CCFpMessageLog,
+    CCFpProvider,
     CCFpReferralBoard,
     CCFpReferralExam,
     CCFpStatus,
@@ -102,10 +103,33 @@ def _patient_name(card: R) -> str:
     return " ".join(x for x in (card.first_name, card.last_name) if x) or "Unknown patient"
 
 
-def default_subject(card: R) -> str:
+INSURANCE_SUBJECT = "Referral Returned"
+
+
+def default_subject(card: R, kind: str = "unreachable") -> str:
+    if kind == "insurance":
+        return INSURANCE_SUBJECT
+
     name = _patient_name(card)
 
     return f"Referral Update {name}: Unable to reach patient {name} after multiple attempts"
+
+
+def _national(digits: str) -> str:
+    """(972) 555-0100 for a US number, otherwise the digits as they are."""
+    digits = _plain(digits)
+
+    return f"({digits[:3]}) {digits[3:6]}-{digits[6:]}" if len(digits) == 10 else digits
+
+
+def _doctor(name: str | None) -> str:
+    """Dr. Jane Smith, without doubling a Dr. already in the name."""
+    name = (name or "").strip()
+
+    if not name:
+        return "Referring Provider"
+
+    return name if re.match(r"dr(\.|\s)", name, re.IGNORECASE) else f"Dr. {name}"
 
 
 def _load(db: Session, referral_id: int, *, lock: bool = False) -> R:
@@ -282,7 +306,43 @@ def build_body(db: Session, card: R) -> str:
     return "\n".join(lines)
 
 
-def build_draft(db: Session, referral_id: int) -> FaxBackDraftResponse:
+def build_insurance_body(db: Session, card: R, destination: str) -> str:
+    """The fax returning a referral because the patient wants to use insurance
+    and ScanX provides self-pay services only. No contact history is included."""
+    provider = db.get(CCFpProvider, card.provider_id) if card.provider_id else None
+    clinic = (provider.organization or "").strip() if provider else ""
+    doctor = _doctor(card.physician_name)
+    fax = _national(destination.split("@")[0]) if destination else ""
+    phone = _national(settings.twilio_voice_from_number or "")
+    today = datetime.now(BUSINESS_TZ)
+
+    to_line = (
+        f"To: {doctor}" + (f", {clinic}" if clinic else "") + (f" | Fax: {fax}" if fax else "")
+    )
+    from_line = "From: ScanX Imaging" + (f" | {phone}" if phone else "")
+
+    return "\n".join(
+        [
+            to_line,
+            from_line,
+            f"Date: {today:%B} {today.day}, {today.year}",
+            "",
+            f"Dear {doctor},",
+            "",
+            "Thank you for your referral. We contacted the patient below to schedule their exam:",
+            "",
+            f"Patient: {_patient_name(card)}",
+            "",
+            "The patient wishes to use insurance for this exam. As ScanX provides self-pay "
+            "services only, we are returning this referral and no exam has been scheduled "
+            "with us.",
+            "",
+            "Thank you for working with ScanX.",
+        ]
+    )
+
+
+def build_draft(db: Session, referral_id: int, kind: str = "unreachable") -> FaxBackDraftResponse:
     """What the Send fax pop-up starts with; everything in it can be changed."""
     card = _load(db, referral_id)
     number, source = _default_destination(db, card)
@@ -290,9 +350,11 @@ def build_draft(db: Session, referral_id: int) -> FaxBackDraftResponse:
     return FaxBackDraftResponse(
         destination_number=number,
         destination_source=source,
-        subject=default_subject(card),
-        body=build_body(db, card),
-        can_mark_didnt_respond=card.status == FAX_PENDING,
+        subject=default_subject(card, kind),
+        body=build_insurance_body(db, card, number)
+        if kind == "insurance"
+        else build_body(db, card),
+        can_mark_didnt_respond=kind == "unreachable" and card.status == FAX_PENDING,
         original_fax_available=_original_fax_available(db, card),
     )
 
@@ -335,7 +397,7 @@ def send_fax_back(
     if status_row is not None and not status_row.is_open and card.status != DIDNT_RESPOND:
         raise FaxBackError("This referral is closed.")
 
-    if payload.mark_didnt_respond and card.status != FAX_PENDING:
+    if payload.mark_didnt_respond and (payload.kind != "unreachable" or card.status != FAX_PENDING):
         raise FaxBackError(
             "Only a referral in Fax Provider Name Pending can be moved to Didn't Respond."
         )
@@ -350,7 +412,7 @@ def send_fax_back(
     if not body:
         raise FaxBackError("The fax needs a message.")
 
-    subject = (payload.subject or "").strip() or default_subject(card)
+    subject = (payload.subject or "").strip() or default_subject(card, payload.kind)
     attachments = [_original_fax(db, card)] if payload.attach_original else []
 
     try:
@@ -373,7 +435,7 @@ def send_fax_back(
             user_id=user.id,
             referral_id=card.id,
             fax_id=card.fax_id,
-            details={"destination_last4": digits[-4:]},
+            details={"destination_last4": digits[-4:], "kind": payload.kind},
             ip_address=ip_address,
             user_agent=user_agent,
         )
@@ -407,6 +469,7 @@ def send_fax_back(
         fax_id=card.fax_id,
         details={
             "destination_last4": digits[-4:],
+            "kind": payload.kind,
             "email_message_id": message_id,
             "attached_original": bool(attachments),
             "moved_to": moved_to,

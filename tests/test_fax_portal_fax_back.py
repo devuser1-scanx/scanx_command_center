@@ -17,6 +17,7 @@ from app.models.fax_portal import (
     CCFpCallLog,
     CCFpFax,
     CCFpMessageLog,
+    CCFpProvider,
     CCFpReferralBoard,
 )
 from app.services import fax_portal_fax_back
@@ -135,9 +136,13 @@ def unreachable(db: Session, agent: Any, **kwargs: Any) -> CCFpReferralBoard:
     return card
 
 
-def draft(client: TestClient, user: Any, card: CCFpReferralBoard) -> dict[str, Any]:
+def draft(
+    client: TestClient, user: Any, card: CCFpReferralBoard, kind: str = "unreachable"
+) -> dict[str, Any]:
     response = client.get(
-        f"/fax-portal/referrals/{card.id}/fax-back", headers=auth_headers(client, user)
+        f"/fax-portal/referrals/{card.id}/fax-back",
+        params={"kind": kind},
+        headers=auth_headers(client, user),
     )
 
     assert response.status_code == 200, response.text
@@ -335,6 +340,7 @@ def test_the_send_is_audited_and_shows_on_the_timeline_without_the_number(
     assert entry.user_id == agent.id and entry.referral_id == card.id
     assert entry.details == {
         "destination_last4": "0100",
+        "kind": "unreachable",
         "email_message_id": "gmail-msg-1",
         "moved_to": None,
         "attached_original": True,
@@ -537,3 +543,81 @@ def test_a_referral_closed_as_didnt_respond_can_still_be_faxed_back(
     assert response.status_code == 200, response.text
     assert response.json()["moved_to"] is None
     assert len(email.sent) == 1
+
+
+def test_the_insurance_draft_returns_the_referral_with_the_fixed_wording(
+    client: TestClient,
+    db_session: Session,
+    agent: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "twilio_voice_from_number", "+14698046999")
+    provider = CCFpProvider(name="Dr. Fatema Dabdoub", organization="Fairview OBGYN")
+    db_session.add(provider)
+    db_session.flush()
+    card = unreachable(db_session, agent, provider_id=provider.id)
+
+    result = draft(client, agent, card, kind="insurance")
+
+    assert result["subject"] == "Referral Returned"
+    assert result["destination_number"] == "9725550100@westfax.com"
+    assert result["can_mark_didnt_respond"] is False
+    body = result["body"]
+    assert "To: Dr. Fatema Dabdoub, Fairview OBGYN | Fax: (972) 555-0100" in body
+    assert "From: ScanX Imaging | (469) 804-6999" in body
+    assert "Dear Dr. Fatema Dabdoub," in body
+    assert "Patient: Karen Quinonez" in body
+    assert "ScanX provides self-pay services only" in body
+    # No contact history, message text or agent names.
+    assert "Contact attempts" not in body and SECRET_TEXT not in body
+
+
+def test_the_insurance_draft_copes_with_missing_details(
+    client: TestClient,
+    db_session: Session,
+    agent: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "twilio_voice_from_number", None)
+    card = unreachable(db_session, agent, physician_name=None)
+
+    body = draft(client, agent, card, kind="insurance")["body"]
+
+    assert "To: Referring Provider | Fax: (972) 555-0100" in body
+    assert "From: ScanX Imaging\n" in body
+
+
+def test_an_insurance_fax_is_sent_audited_and_never_moves_the_referral(
+    client: TestClient, db_session: Session, agent: Any, email: FakeEmail
+) -> None:
+    card = unreachable(db_session, agent)
+
+    response = send(
+        client, agent, card, kind="insurance", subject="Referral Returned", body="Returned."
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["moved_to"] is None
+    assert email.sent[0]["subject"] == "Referral Returned"
+    assert len(email.sent[0]["attachments"]) == 1
+    db_session.refresh(card)
+    assert card.status == "fax_provider_name_pending"
+    entry = db_session.scalars(
+        select(CCFpActivityLog).where(CCFpActivityLog.action == "fax_back")
+    ).one()
+    assert (entry.details or {}).get("kind") == "insurance"
+
+    timeline = client.get(
+        f"/fax-portal/referrals/{card.id}/case", headers=auth_headers(client, agent)
+    ).json()["timeline"]
+    assert any("insurance" in (event.get("detail") or "") for event in timeline)
+
+
+def test_an_insurance_fax_cannot_also_mark_didnt_respond(
+    client: TestClient, db_session: Session, agent: Any, email: FakeEmail
+) -> None:
+    card = unreachable(db_session, agent)
+
+    response = send(client, agent, card, kind="insurance", mark_didnt_respond=True)
+
+    assert response.status_code == 422 and email.sent == []

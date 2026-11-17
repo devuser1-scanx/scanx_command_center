@@ -20,6 +20,7 @@ from app.schemas.fax_portal import (
     DirectBookResponse,
     DoNotCallResponse,
     FaxBackDraftResponse,
+    FaxBackKind,
     FaxBackRequest,
     FaxBackResponse,
     IntakeUpdateRequest,
@@ -346,6 +347,7 @@ def direct_book_route(
 @router.get("/referrals/{referral_id}/fax-back", response_model=FaxBackDraftResponse)
 def fax_back_draft_route(
     referral_id: int,
+    kind: FaxBackKind = "unreachable",
     db: Session = Depends(get_db),
     current_user: CCUser = Depends(require_fax_portal_access),
 ) -> FaxBackDraftResponse:
@@ -353,7 +355,7 @@ def fax_back_draft_route(
     number the referral came from, the subject, and the message with the list of
     contact attempts."""
     try:
-        return fax_portal_fax_back.build_draft(db, referral_id)
+        return fax_portal_fax_back.build_draft(db, referral_id, kind)
     except ReferralError as error:
         _raise(db, error)
         raise

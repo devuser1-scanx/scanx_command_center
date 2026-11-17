@@ -552,7 +552,13 @@ class FaxBackDraftResponse(BaseModel):
     original_fax_available: bool = False
 
 
+# Why the referring physician is being faxed: the patient could not be reached,
+# or the patient wants to use insurance and ScanX is self-pay only.
+FaxBackKind = Literal["unreachable", "insurance"]
+
+
 class FaxBackRequest(BaseModel):
+    kind: FaxBackKind = "unreachable"
     destination_number: str = Field(min_length=1, max_length=100)
     subject: str | None = Field(default=None, max_length=300)
     body: str = Field(min_length=1, max_length=20000)

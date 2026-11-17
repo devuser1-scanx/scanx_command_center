@@ -595,7 +595,11 @@ def _timeline(
                     at=e.occurred_at,
                     kind="edit",
                     title="Faxed the referring provider",
-                    detail="Unable to reach the patient",
+                    detail=(
+                        "Patient wants to use insurance: referral returned"
+                        if (e.details or {}).get("kind") == "insurance"
+                        else "Unable to reach the patient"
+                    ),
                     actor=person(e.user_id),
                 )
             )
