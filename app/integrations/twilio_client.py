@@ -142,6 +142,7 @@ def send_content_message(
     to: str,
     content_sid: str,
     content_variables: dict[str, str],
+    status_callback: str | None = None,
 ) -> TwilioSendResult:
     """
     Send a Twilio Content Template through the configured Messaging Service.
@@ -161,6 +162,9 @@ def send_content_message(
         "ContentSid": content_sid,
         "ContentVariables": json.dumps(content_variables),
     }
+
+    if status_callback:
+        data["StatusCallback"] = status_callback
 
     return _send_message(data)
 

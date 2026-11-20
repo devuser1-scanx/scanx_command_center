@@ -252,6 +252,7 @@ def test_quiet_hours_block_texts(
     twilio: FakeTwilio,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(fax_portal_case, "ENFORCE_TEXT_HOURS", True)
     monkeypatch.setattr(fax_portal_case, "text_window_open", QUIET_HOURS)
     card = card_for_texting(db_session)
     headers = auth_headers(client, staff)

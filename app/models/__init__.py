@@ -36,6 +36,7 @@ from app.models.fax_portal import (
     CCFpStatus,
 )
 from app.models.google_reviews import CCGoogleReview
+from app.models.image_invoices import CCImageInvoice
 from app.models.mail import CCMailTransmission
 from app.models.sms import CCSmsTransmission
 
@@ -74,6 +75,7 @@ __all__ = [
     "CCFpReferralStatusHistory",
     "CCFpStatus",
     "CCGoogleReview",
+    "CCImageInvoice",
     "CCMailTransmission",
     "CCSmsTransmission",
 ]

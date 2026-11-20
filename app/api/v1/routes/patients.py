@@ -23,6 +23,7 @@ from app.schemas.fax import (
     FaxReportLookupResponse,
     SendFaxResponse,
 )
+from app.schemas.image_invoices import ImageInvoiceResponse
 from app.schemas.mail import SendMailResponse
 from app.schemas.patients import (
     ManualCheckInResponse,
@@ -51,6 +52,10 @@ from app.schemas.transvag_form_links import (
 from app.services.fax import (
     lookup_patient_report,
     send_patient_fax,
+)
+from app.services.image_invoices import (
+    get_image_invoice_status,
+    send_image_invoice,
 )
 from app.services.mail import (
     send_patient_mail,
@@ -252,6 +257,39 @@ def send_sms_route(
         destination_number=(destination_number),
         body=body,
         actor=current_user,
+    )
+
+
+@router.get(
+    "/{appointment_id}/image-invoice",
+    response_model=ImageInvoiceResponse | None,
+)
+def get_image_invoice_route(
+    appointment_id: str,
+    db: Session = Depends(get_db),
+    current_user: CCUser = Depends(require_permission("patients.image_invoice")),
+) -> ImageInvoiceResponse | None:
+    return get_image_invoice_status(db, appointment_id)
+
+
+@router.post(
+    "/{appointment_id}/image-invoice",
+    response_model=ImageInvoiceResponse,
+)
+def send_image_invoice_route(
+    appointment_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    prod_db: Session = Depends(get_prod_db),
+    current_user: CCUser = Depends(require_permission("patients.image_invoice")),
+) -> ImageInvoiceResponse:
+    return send_image_invoice(
+        db,
+        prod_db,
+        appointment_id=appointment_id,
+        actor=current_user,
+        ip_address=(request.client.host if request.client else None),
+        user_agent=request.headers.get("user-agent"),
     )
 
 

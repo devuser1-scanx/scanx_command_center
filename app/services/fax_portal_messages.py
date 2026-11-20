@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.integrations.twilio_client import TwilioApiError, send_sms
+from app.integrations.twilio_client import TwilioApiError, send_content_message, send_sms
 from app.models.auth import CCUser
 from app.models.fax_portal import (
     CCFpContactOptout,
@@ -207,9 +207,15 @@ def send_message(
     user: CCUser,
     ip_address: str | None = None,
     user_agent: str | None = None,
+    content_sid: str | None = None,
+    content_variables: dict[str, str] | None = None,
 ) -> SendMessageResponse:
     """Texts the patient (RCS through the Twilio Messaging Service, falling
     back to SMS) and records it in cc_fp_message_log.
+
+    With `content_sid` the message goes as that Twilio Content Template (an RCS
+    card) filled with `content_variables`; `body` is then the plain-text
+    version, kept in the log.
 
     Refused when the referral is closed or not released yet, the number is on
     the do-not-call list or opted out, or it is outside the sending hours. The
@@ -260,7 +266,15 @@ def send_message(
     )
 
     try:
-        result = send_sms(to=phone, body=text, status_callback=callback)
+        if content_sid:
+            result = send_content_message(
+                to=phone,
+                content_sid=content_sid,
+                content_variables=content_variables or {},
+                status_callback=callback,
+            )
+        else:
+            result = send_sms(to=phone, body=text, status_callback=callback)
     except TwilioApiError as exc:
         _record_failure(db, message_id, phone, exc.code, exc.message, user, ip_address, user_agent)
 

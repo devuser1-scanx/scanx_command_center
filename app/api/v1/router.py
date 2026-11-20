@@ -8,6 +8,7 @@ from app.api.v1.routes import (
     fax_portal,
     fax_portal_case,
     fax_portal_intake,
+    fax_portal_public,
     fax_portal_twilio_webhooks,
     fax_portal_webhooks,
     health,
@@ -15,6 +16,7 @@ from app.api.v1.routes import (
     patients,
     reports,
     roles,
+    stripe_webhooks,
     users,
     ws_calls,
     ws_dashboard,
@@ -88,6 +90,11 @@ api_router.include_router(
 )
 
 api_router.include_router(
+    fax_portal_public.router,
+    tags=["fax portal"],
+)
+
+api_router.include_router(
     fax_portal_twilio_webhooks.router,
     tags=["fax portal"],
 )
@@ -105,4 +112,9 @@ api_router.include_router(
 api_router.include_router(
     inbox.router,
     tags=["inbox"],
+)
+
+api_router.include_router(
+    stripe_webhooks.router,
+    tags=["stripe webhooks"],
 )

@@ -26,6 +26,7 @@ from app.schemas.fax_portal import (
     IntakeUpdateRequest,
     IntakeUpdateResponse,
     MessageTemplateResponse,
+    PrefillLinkDraftResponse,
     ReferralSearchItem,
     SendMessageRequest,
     SendMessageResponse,
@@ -39,6 +40,7 @@ from app.services import (
     fax_portal_fax_back,
     fax_portal_intake,
     fax_portal_messages,
+    fax_portal_prefill_link,
 )
 from app.services.fax_portal_referrals import ReferralError
 
@@ -422,3 +424,40 @@ def booking_info_route(
         matches=matches,
         matches_unavailable=unavailable,
     )
+
+
+@router.get("/referrals/{referral_id}/prefill-link", response_model=PrefillLinkDraftResponse)
+def prefill_link_draft_route(
+    referral_id: int,
+    db: Session = Depends(get_db),
+    current_user: CCUser = Depends(require_fax_portal_access),
+) -> PrefillLinkDraftResponse:
+    """The text the patient would get with their personal booking link, and why
+    it cannot be sent yet (if so)."""
+    try:
+        return fax_portal_prefill_link.build_draft(db, referral_id)
+    except ReferralError as error:
+        _raise(db, error)
+        raise
+
+
+@router.post("/referrals/{referral_id}/prefill-link", response_model=SendMessageResponse)
+def send_prefill_link_route(
+    referral_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: CCUser = Depends(require_fax_portal_access),
+) -> SendMessageResponse:
+    """Texts the patient a personal link that opens the Acuity booking page with
+    their details filled in (same rules as any text to the patient)."""
+    try:
+        return fax_portal_prefill_link.send_prefill_link(
+            db,
+            referral_id,
+            user=current_user,
+            ip_address=request_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+    except ReferralError as error:
+        _raise(db, error)
+        raise

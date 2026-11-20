@@ -90,6 +90,7 @@ PERMISSIONS = [
     ("patients.fax", "patients", "Send Patient Faxes"),
     ("patients.mail", "patients", "Send Patient Emails"),
     ("patients.sms", "patients", "Send Patient SMS"),
+    ("patients.image_invoice", "patients", "Send Ultrasound Image Invoice"),
     ("fax_portal.access", "fax_portal", "Access FAX Portal"),
 ]
 
@@ -106,6 +107,7 @@ MODULE_PERMISSIONS = {
         "patients.fax",
         "patients.mail",
         "patients.sms",
+        "patients.image_invoice",
         "appointments.view",
         "appointments.update",
         "clinics.view",

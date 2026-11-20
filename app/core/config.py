@@ -124,11 +124,42 @@ class Settings(BaseSettings):
     #   2 -> payment link
     twilio_payment_template_sid: str | None = None
 
+    # Fax Portal "Send prefill link to patient": the Content Template of the RCS
+    # card with the Book Appointment button (see
+    # Twilio_Prefill_Link_RCS_Template.md). Unset: the link goes as a plain text.
+    #
+    # Content variables:
+    #   1 -> patient first name
+    #   2 -> exam (e.g. "liver ultrasound")
+    #   3 -> the patient's personal booking link
+    twilio_prefill_link_content_sid: str | None = None
+
     # Public base URL of this API (e.g. https://<service>.run.app), used to tell
     # Twilio where to post message status callbacks and call instructions, and
     # to verify their signatures. Unset: texts are still sent, just without
     # delivery updates, and click-to-call is unavailable.
     public_api_base_url: str | None = None
+
+    # Stripe: the "Send Image Invoice" button on a patient profile (a fixed
+    # $45 invoice for the patient's ultrasound exam images). Separate from the
+    # referral-organization invoicing that lives in the production database.
+    #
+    # stripe_restricted_api_key_image_invoice: a *restricted* key (Customers,
+    # Invoices and Invoice Items write; Prices read), kept in Secret Manager.
+    # stripe_image_price_id_image_invoice: the Price ("price_...") of the catalog item
+    # "Ultrasound Exam Images" ($45.00 USD, one-time). The amount is also
+    # enforced in code (app/services/image_invoices.py), so an edited price in
+    # the Stripe dashboard cannot silently change what patients are billed.
+    # stripe_webhook_secret_image_invoice: the signing secret ("whsec_...") of the webhook
+    # endpoint <PUBLIC_API_BASE_URL>/webhooks/stripe. The endpoint fails closed
+    # without it.
+    stripe_restricted_api_key_image_invoice: str | None = None
+    stripe_image_price_id_image_invoice: str | None = None
+    stripe_webhook_secret_image_invoice: str | None = None
+    # stripe_image_invoice_days_until_due: a plain whole number of days (7, not
+    # "7 days"). Change it here to change the due date of new invoices; the app
+    # refuses to start on a value outside 1-365.
+    stripe_image_invoice_days_until_due: Annotated[int, Field(ge=1, le=365)] = 7
 
     # Acuity Scheduling
     acuity_user_id: str | None = None

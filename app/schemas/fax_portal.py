@@ -514,6 +514,18 @@ class SendMessageResponse(BaseModel):
     channel: Literal["rcs", "sms"]
 
 
+class PrefillLinkDraftResponse(BaseModel):
+    """The "Send prefill link to patient" confirmation."""
+
+    # The text the patient will get; [personal link] stands in for the link.
+    message: str
+    # True when it goes as an RCS card with a Book Appointment button (the text
+    # is then the card's wording); False when it goes as a plain text.
+    as_card: bool = False
+    # Why it cannot be sent yet; None when it can.
+    blocked_reason: str | None
+
+
 class MessageTemplateResponse(BaseModel):
     code: str
     label: str

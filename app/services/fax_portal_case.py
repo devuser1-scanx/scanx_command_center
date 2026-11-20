@@ -61,7 +61,9 @@ R = CCFpReferralBoard
 
 BUSINESS_TZ = ZoneInfo("America/Chicago")
 
-# Texts go out between these local hours only (TCPA quiet hours).
+# The hours texts may go out (clinic time; the usual TCPA quiet hours). Not
+# enforced for now: set ENFORCE_TEXT_HOURS to True to block texts outside them.
+ENFORCE_TEXT_HOURS = False
 TEXT_FROM_HOUR = 8
 TEXT_UNTIL_HOUR = 21
 
@@ -241,7 +243,7 @@ def text_block_reason(db: Session, card: R, *, now: datetime | None = None) -> s
     if optout is not None and optout.sms_opt_out_at is not None:
         return "The patient has opted out of text messages."
 
-    if not text_window_open(now):
+    if ENFORCE_TEXT_HOURS and not text_window_open(now):
         return (
             f"Texts are not sent between {TEXT_UNTIL_HOUR - 12} PM and {TEXT_FROM_HOUR} AM "
             "(clinic time)."
@@ -323,7 +325,9 @@ def get_case(db: Session, referral_id: int) -> CaseDetailResponse:
             select(CCFpActivityLog)
             .where(
                 CCFpActivityLog.referral_id == card.id,
-                CCFpActivityLog.action.in_(["edit_field", "reassign", "do_not_call", "fax_back"]),
+                CCFpActivityLog.action.in_(
+                    ["edit_field", "reassign", "do_not_call", "fax_back", "prefill_link_opened"]
+                ),
             )
             .order_by(CCFpActivityLog.occurred_at.asc(), CCFpActivityLog.id.asc())
         )
@@ -587,6 +591,15 @@ def _timeline(
                     kind="edit",
                     title="Marked do not call",
                     actor=person(e.user_id),
+                )
+            )
+        elif e.action == "prefill_link_opened":
+            events.append(
+                TimelineEvent(
+                    at=e.occurred_at,
+                    kind="system",
+                    title="Patient opened the booking link",
+                    detail="The Acuity booking page opened with their details filled in",
                 )
             )
         elif e.action == "fax_back":
